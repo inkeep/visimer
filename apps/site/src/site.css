@@ -36,6 +36,13 @@ textarea {
   }
 }
 
+/* Playground expand: smooth 400ms morph via the View Transitions API. */
+::view-transition-old(playground-shell),
+::view-transition-new(playground-shell) {
+  animation-duration: 400ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 /* The live demo embeds the real editor; keep its canvas transparent so the
    dotted preview background shows through, and center the rendered SVG the
    way the design's preview pane does. */

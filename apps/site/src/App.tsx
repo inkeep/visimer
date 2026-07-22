@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { flushSync } from 'react-dom'
 import mermaid from 'mermaid'
 import { MermaidCodeMirror } from '@visimer/codemirror'
 import type { MermaidWysiwygEditor } from '@visimer/core'
@@ -125,17 +126,12 @@ const FEATURES: Array<{ mark: string; title: string; body: string }> = [
   {
     mark: '⇄',
     title: 'Two-way sync',
-    body: 'Type Mermaid or edit visually — source and canvas stay in perfect lockstep, always.',
+    body: 'Type Mermaid or edit visually. Source and canvas stay in lockstep, always.',
   },
   {
     mark: '⊹',
     title: 'Click to edit',
     body: 'Select any node to rename, reshape, or restyle it. No hunting through syntax for one label.',
-  },
-  {
-    mark: '◇',
-    title: 'Every diagram type',
-    body: 'Flowchart, sequence, class, state, ER, Gantt and more — 22 of Mermaid’s 23 diagram types are editable.',
   },
   {
     mark: '❖',
@@ -146,11 +142,6 @@ const FEATURES: Array<{ mark: string; title: string; body: string }> = [
     mark: '{}',
     title: 'Framework-agnostic',
     body: 'A headless core with React, vanilla DOM, CodeMirror, and Monaco bindings. Drop it into anything.',
-  },
-  {
-    mark: '✦',
-    title: 'Great for AI loops',
-    body: 'Agents write Mermaid fluently. Paste a generated diagram, then fix the labels and shapes by hand.',
   },
 ]
 
@@ -243,12 +234,24 @@ export default function App() {
   const [skin, setSkin] = useState<'light' | 'dark'>('light')
   const [expanded, setExpanded] = useState(false)
 
+  // Morph the playground shell between inline and fullscreen. Chrome/Safari get
+  // the crossfade; Firefox just snaps (state update falls through unchanged).
+  // flushSync is load-bearing — the View Transitions API captures the DOM
+  // before returning, so React must commit the state update synchronously.
+  const setExpandedAnimated = (next: boolean) => {
+    if (typeof document.startViewTransition === 'function') {
+      document.startViewTransition(() => flushSync(() => setExpanded(next)))
+    } else {
+      setExpanded(next)
+    }
+  }
+
   // fullscreen playground: Esc exits, and the page behind must not scroll
   useEffect(() => {
     if (!expanded) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !(e.target instanceof HTMLElement && e.target.isContentEditable)) {
-        setExpanded(false)
+        setExpandedAnimated(false)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -263,6 +266,25 @@ export default function App() {
   const [copied, setCopied] = useState(false)
   const [installCopied, setInstallCopied] = useState(false)
   const [ghStars, setGhStars] = useState<number | null>(null)
+
+  // Fade the "Leave a star!" hint out as the "Open source · MIT" badge scrolls
+  // up under the sticky navbar. We track the badge itself so the fade is tied
+  // to the thing the user actually sees moving.
+  const badgeRef = useRef<HTMLDivElement>(null)
+  const [starHintOpacity, setStarHintOpacity] = useState(1)
+  useEffect(() => {
+    const badge = badgeRef.current
+    if (!badge) return
+    const navBottom = 80
+    const startTop = badge.getBoundingClientRect().top + window.scrollY - navBottom
+    const onScroll = () => {
+      const distance = badge.getBoundingClientRect().top - navBottom
+      setStarHintOpacity(Math.max(0, Math.min(1, distance / startTop)))
+    }
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
   const switchType = (next: string) => {
     setType(next)
@@ -376,7 +398,7 @@ export default function App() {
             }}
           >
             <Logo size={26} />
-            MermaidWYSIWYG
+            Visimer
           </a>
           <nav style={{ display: 'flex', gap: 22, marginLeft: 6, fontSize: 14.5 }}>
             <a href="#demo" style={{ color: '#6B6559' }}>
@@ -422,6 +444,8 @@ export default function App() {
                 display: 'flex',
                 alignItems: 'flex-start',
                 gap: 4,
+                opacity: starHintOpacity,
+                transition: 'opacity 120ms linear',
               }}
             >
               <span
@@ -469,6 +493,7 @@ export default function App() {
       <main id="top">
         <section style={{ maxWidth: 1000, margin: '0 auto', padding: '82px 26px 30px', textAlign: 'center' }}>
           <div
+            ref={badgeRef}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -508,12 +533,17 @@ export default function App() {
               textWrap: 'pretty',
             }}
           >
-            A WYSIWYG editor for Mermaid. Click a node to rename or reshape it — the source rewrites itself. Perfect
+            A WYSIWYG editor for Mermaid. Click a node to rename or reshape it. The source rewrites itself. Perfect
             for fixing up AI-generated diagrams the visual way.
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap', marginTop: 30 }}>
             <a
               href="#demo"
+              onClick={(e) => {
+                e.preventDefault()
+                document.getElementById('demo')?.scrollIntoView({ behavior: 'smooth' })
+                setExpandedAnimated(true)
+              }}
               style={{
                 background: '#1C1A17',
                 color: '#F7F4ED',
@@ -521,6 +551,7 @@ export default function App() {
                 borderRadius: 11,
                 fontWeight: 600,
                 fontSize: 15,
+                cursor: 'pointer',
               }}
             >
               Open the playground
@@ -606,7 +637,7 @@ export default function App() {
               Take it for a spin.
             </h2>
             <p style={{ color: '#544F47', fontSize: 17, maxWidth: 560, margin: '12px auto 0', textWrap: 'pretty' }}>
-              This is the real editor running in your browser — pick a diagram type, edit the source, click nodes.
+              This is the real editor running in your browser. Pick a diagram type, edit the source, click nodes.
               Nothing to install.
             </p>
           </div>
@@ -615,6 +646,7 @@ export default function App() {
               background: dark ? '#1A1712' : '#FCFAF5',
               border: `1px solid ${chromeBorder}`,
               overflow: 'hidden',
+              viewTransitionName: 'playground-shell',
               ...(expanded
                 ? {
                     position: 'fixed',
@@ -675,7 +707,7 @@ export default function App() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setExpanded(!expanded)}
+                  onClick={() => setExpandedAnimated(!expanded)}
                   aria-label={expanded ? 'Exit full screen' : 'Expand playground to full screen'}
                   title={expanded ? 'Exit full screen (Esc)' : 'Full screen'}
                   style={{
@@ -769,7 +801,7 @@ export default function App() {
             </div>
           </div>
           <p style={{ textAlign: 'center', color: '#8A857A', fontSize: 13.5, marginTop: 14 }}>
-            Tip: click any box in the preview — the popover on the diagram edits it. Watch the source pane rewrite
+            Tip: click any box in the preview. The popover on the diagram edits it. Watch the source pane rewrite
             itself.
           </p>
         </section>
@@ -788,7 +820,7 @@ export default function App() {
             Diagrams you can actually touch.
           </h2>
           <p style={{ textAlign: 'center', color: '#544F47', fontSize: 17, maxWidth: 560, margin: '14px auto 0', textWrap: 'pretty' }}>
-            Everything a human needs to fix a diagram fast — no re-learning Mermaid syntax to move one arrow.
+            Everything a human needs to fix a diagram fast, without re-learning Mermaid syntax to move one arrow.
           </p>
           <div
             style={{
@@ -873,11 +905,11 @@ export default function App() {
             Add it to your own editor.
           </h2>
           <p style={{ textAlign: 'center', color: '#544F47', fontSize: 17, maxWidth: 600, margin: '0 auto 30px' }}>
-            The playground above is this exact package — one headless engine with React, vanilla DOM, CodeMirror,
+            The playground above is this exact package. One headless engine with React, vanilla DOM, CodeMirror,
             and Monaco bindings. Six recipes cover the whole surface.
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 }}>
-            <CodeCard title="React — @visimer/react">
+            <CodeCard title="React · @visimer/react">
               <span style={cmt}># npm i @visimer/react</span>
               {'\n'}
               <span style={kw}>import</span> mermaid <span style={kw}>from</span> <span style={str}>'mermaid'</span>
@@ -887,7 +919,7 @@ export default function App() {
               {'\n\n'}&lt;<span style={ident}>MermaidWysiwyg</span> <span style={str}>code</span>={'{diagram}'}{' '}
               <span style={str}>onCodeChange</span>={'{setDiagram}'} <span style={str}>mermaid</span>={'{mermaid}'} /&gt;
             </CodeCard>
-            <CodeCard title="Vanilla — -core + -dom">
+            <CodeCard title="Vanilla · -core + -dom">
               <span style={cmt}># framework-free canvas, any app</span>
               {'\n'}
               <span style={kw}>const</span> editor = <span style={kw}>new</span> <span style={ident}>MermaidWysiwygEditor</span>({'{ '}
@@ -901,7 +933,7 @@ export default function App() {
               <span style={str}>code</span>
               {' }'}) =&gt; <span style={ident}>save</span>(code))
             </CodeCard>
-            <CodeCard title="CodeMirror pane — -codemirror">
+            <CodeCard title="CodeMirror pane · -codemirror">
               <span style={cmt}># the source pane in the playground above</span>
               {'\n'}
               <span style={kw}>import</span> {'{ MermaidCodeMirror }'} <span style={kw}>from</span>{' '}
@@ -909,9 +941,9 @@ export default function App() {
               {'\n\n'}
               <span style={kw}>new</span> <span style={ident}>MermaidCodeMirror</span>(host, editor)
               {'\n'}
-              <span style={cmt}># typing, highlights, undo — all shared with the canvas</span>
+              <span style={cmt}># typing, highlights, undo, all shared with the canvas</span>
             </CodeCard>
-            <CodeCard title="Monaco — -monaco">
+            <CodeCard title="Monaco · -monaco">
               <span style={cmt}># bring your own monaco instance; zero monaco dependency</span>
               {'\n'}
               <span style={kw}>import</span> {'{ bindMonaco }'} <span style={kw}>from</span>{' '}
@@ -920,7 +952,7 @@ export default function App() {
               <span style={kw}>const</span> binding = <span style={ident}>bindMonaco</span>(editor, monacoEditor)
               {'\n'}binding.<span style={ident}>dispose</span>()
             </CodeCard>
-            <CodeCard title="Headless — drive it from code">
+            <CodeCard title="Headless · drive it from code">
               <span style={cmt}># every gesture is also a semantic op</span>
               {'\n'}editor.<span style={ident}>dispatch</span>({'{ '}
               <span style={str}>type</span>: <span style={str}>'renameNode'</span>, <span style={str}>id</span>:{' '}
@@ -932,7 +964,7 @@ export default function App() {
               {' }'})
               {'\n'}editor.<span style={ident}>undo</span>()
             </CodeCard>
-            <CodeCard title="Theming — CSS variables">
+            <CodeCard title="Theming · CSS variables">
               <span style={cmt}># chrome follows your tokens; mermaid keeps its themes</span>
               {'\n'}.mw-canvas {'{'}
               {'\n'}  <span style={str}>--mw-accent</span>: <span style={ident}>#0E7C6B</span>;
@@ -959,7 +991,7 @@ export default function App() {
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 9, fontWeight: 600, letterSpacing: '-0.02em' }}>
               <Logo size={22} />
-              MermaidWYSIWYG
+              Visimer
             </div>
             <div style={{ display: 'flex', gap: 20, fontSize: 14, marginLeft: 8, flexWrap: 'wrap' }}>
               <a href={REPO_URL} style={{ color: '#6B6559' }}>
