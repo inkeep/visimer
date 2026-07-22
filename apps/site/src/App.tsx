@@ -212,6 +212,7 @@ function CodeCard({ title, children }: { title: string; children: ReactNode }) {
       </div>
       <pre
         ref={preRef}
+        className="code-card-scroll"
         style={{
           margin: 0,
           padding: '18px 16px',
