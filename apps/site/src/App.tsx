@@ -276,14 +276,22 @@ export default function App() {
     const badge = badgeRef.current
     if (!badge) return
     const navBottom = 80
-    const startTop = badge.getBoundingClientRect().top + window.scrollY - navBottom
-    const onScroll = () => {
-      const distance = badge.getBoundingClientRect().top - navBottom
-      setStarHintOpacity(Math.max(0, Math.min(1, distance / startTop)))
+    const compute = () => {
+      const rect = badge.getBoundingClientRect()
+      // Re-derive the fade origin every tick so a late web-font layout
+      // shift or viewport resize doesn't leave the ratio stale.
+      const startTop = rect.top + window.scrollY - navBottom
+      if (startTop <= 0) return 0
+      return Math.max(0, Math.min(1, (rect.top - navBottom) / startTop))
     }
+    const onScroll = () => setStarHintOpacity(compute())
     onScroll()
     window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
+    window.addEventListener('resize', onScroll, { passive: true })
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      window.removeEventListener('resize', onScroll)
+    }
   }, [])
 
   const switchType = (next: string) => {
@@ -541,7 +549,16 @@ export default function App() {
               href="#demo"
               onClick={(e) => {
                 e.preventDefault()
-                document.getElementById('demo')?.scrollIntoView({ behavior: 'smooth' })
+                // Park the page at the demo section BEFORE expanding, so that
+                // when the user exits fullscreen they land on the playground
+                // instead of back at the hero. scrollTo is synchronous;
+                // scrollIntoView({smooth}) would be frozen mid-animation by
+                // the body.overflow=hidden expand triggers.
+                const demo = document.getElementById('demo')
+                // `behavior: 'instant'` overrides the html { scroll-behavior:
+                // smooth } rule; a smooth scroll here gets frozen mid-way by
+                // the body.overflow=hidden the useEffect triggers on expand.
+                if (demo) window.scrollTo({ top: demo.offsetTop - 20, behavior: 'instant' })
                 setExpandedAnimated(true)
               }}
               style={{
