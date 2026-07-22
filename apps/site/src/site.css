@@ -178,3 +178,26 @@ textarea {
     gap: 10px !important;
   }
 }
+
+/* CodeCard scrollbars: subtle, tinted to the card chrome (bg #1E1B16, border #2E2A22). */
+.code-card-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #2E2A22 transparent;
+}
+.code-card-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.code-card-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.code-card-scroll::-webkit-scrollbar-thumb {
+  background: #2E2A22;
+  border-radius: 99px;
+}
+.code-card-scroll::-webkit-scrollbar-thumb:hover {
+  background: #3A362D;
+}
+.code-card-scroll::-webkit-scrollbar-corner {
+  background: transparent;
+}
