@@ -529,7 +529,7 @@ export default function App() {
               textWrap: 'balance',
             }}
           >
-            Edit Mermaid diagrams <em style={{ fontStyle: 'normal', color: '#0E7C6B' }}>by hand.</em>
+            Edit Mermaid diagrams <em style={{ fontStyle: 'normal', color: '#0E7C6B' }}>visually.</em>
           </h1>
           <p
             style={{
@@ -541,8 +541,8 @@ export default function App() {
               textWrap: 'pretty',
             }}
           >
-            A WYSIWYG editor for Mermaid. Click a node to rename or reshape it. The source rewrites itself. Perfect
-            for fixing up AI-generated diagrams the visual way.
+            A WYSIWYG editor for Mermaid diagrams. Click a node to rename or reshape it. Perfect for polishing
+            AI-generated diagrams.
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap', marginTop: 30 }}>
             <a
@@ -574,12 +574,28 @@ export default function App() {
               Open the playground
             </a>
             <a
-              href="#install"
+              href="https://openknowledge.ai"
+              target="_blank"
+              rel="noreferrer"
               style={{
                 background: '#FCFAF5',
                 border: '1px solid #E6E0D4',
                 color: '#1C1A17',
                 padding: '13px 22px',
+                borderRadius: 11,
+                fontWeight: 600,
+                fontSize: 15,
+              }}
+            >
+              Try with Open Knowledge ↗
+            </a>
+            <a
+              href="#install"
+              style={{
+                background: 'transparent',
+                border: '1px solid transparent',
+                color: '#544F47',
+                padding: '13px 12px',
                 borderRadius: 11,
                 fontWeight: 600,
                 fontSize: 15,

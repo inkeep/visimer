@@ -51,6 +51,10 @@ Try everything locally:
 pnpm install && pnpm dev   # playground at http://localhost:5173
 ```
 
+## Try with Open Knowledge
+
+Every `.mmd` and Markdown editor in [Open Knowledge](https://openknowledge.ai) ships visimer as its diagram surface. Open a project and you get the same click-a-node-to-edit canvas over your own docs, wired up with realtime collaboration, git-backed history, and shareable links. The fastest way to try visimer on real diagrams is [openknowledge.ai](https://openknowledge.ai).
+
 ## What you can do
 
 - **Edit text in place**: double-click any label and type right on the diagram; nodes grow as you type
