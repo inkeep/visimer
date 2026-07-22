@@ -1,0 +1,69 @@
+{
+  "name": "@visimer/codemirror",
+  "version": "0.1.0",
+  "description": "CodeMirror 6 binding for visimer: two-way code sync, entity highlight decorations, shared undo authority.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "tsup src/index.ts --format esm --dts --sourcemap --out-dir dist",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@visimer/core": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.9",
+    "jsdom": "^25.0.1",
+    "@codemirror/commands": "^6.6.1",
+    "@codemirror/language": "^6.10.3",
+    "@codemirror/state": "^6.4.1",
+    "@codemirror/view": "^6.34.1",
+    "@lezer/highlight": "^1.2.1"
+  },
+  "license": "MIT",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      }
+    }
+  },
+  "author": "Inkeep",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/inkeep/visimer.git",
+    "directory": "packages/codemirror"
+  },
+  "homepage": "https://github.com/inkeep/visimer#readme",
+  "bugs": "https://github.com/inkeep/visimer/issues",
+  "keywords": [
+    "mermaid",
+    "wysiwyg",
+    "diagram",
+    "editor",
+    "codemirror",
+    "visual-editing"
+  ],
+  "sideEffects": false,
+  "peerDependencies": {
+    "@codemirror/commands": "^6.6.1",
+    "@codemirror/language": "^6.10.3",
+    "@codemirror/state": "^6.4.1",
+    "@codemirror/view": "^6.34.1",
+    "@lezer/highlight": "^1.2.1"
+  }
+}

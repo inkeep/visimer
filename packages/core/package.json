@@ -1,0 +1,53 @@
+{
+  "name": "@visimer/core",
+  "version": "0.1.0",
+  "description": "Headless bidirectional editing engine for Mermaid diagrams: lossless CST, semantic graph, ops compiled to minimal text edits.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "tsup src/index.ts --format esm --dts --sourcemap --out-dir dist"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.9"
+  },
+  "license": "MIT",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      }
+    }
+  },
+  "author": "Inkeep",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/inkeep/visimer.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/inkeep/visimer#readme",
+  "bugs": "https://github.com/inkeep/visimer/issues",
+  "keywords": [
+    "mermaid",
+    "wysiwyg",
+    "diagram",
+    "editor",
+    "flowchart",
+    "visual-editing"
+  ],
+  "sideEffects": false
+}

@@ -1,0 +1,160 @@
+* {
+  box-sizing: border-box;
+}
+html {
+  scroll-behavior: smooth;
+}
+body {
+  margin: 0;
+  background: #f7f4ed;
+  color: #1c1a17;
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+a {
+  color: #0e7c6b;
+  text-decoration: none;
+}
+a:hover {
+  color: #0a5c50;
+}
+::selection {
+  background: #cbe7df;
+  color: #122a25;
+}
+textarea {
+  font-family: 'JetBrains Mono', monospace;
+}
+@keyframes okfade {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* The live demo embeds the real editor; keep its canvas transparent so the
+   dotted preview background shows through, and center the rendered SVG the
+   way the design's preview pane does. */
+/* the package injects `.mw-canvas { position: relative }` after this sheet,
+   so the fill-the-pane positioning must out-rank it */
+.site-demo-canvas.mw-canvas {
+  --mw-accent: #0e7c6b;
+  position: absolute;
+  inset: 0;
+}
+
+/* Demo source pane — the real @visimer/codemirror binding,
+   restyled to the site palette. Light and dark variants keyed off the shell. */
+.demo-cm {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+}
+.demo-cm .cm-editor {
+  flex: 1;
+  height: 100%;
+  background: transparent;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  outline: none;
+}
+.demo-cm .cm-editor.cm-focused {
+  outline: none;
+}
+.demo-cm .cm-scroller {
+  overflow: auto;
+  line-height: 1.7;
+  font-family: inherit;
+  padding: 8px 0;
+}
+.demo-cm .cm-content {
+  caret-color: #0e7c6b;
+  color: #1c1a17;
+}
+.demo-cm .cm-gutters {
+  background: transparent;
+  border-right: none;
+  color: #b8b2a4;
+  font-size: 11px;
+  padding-left: 6px;
+}
+.demo-cm .cm-activeLine {
+  background: rgba(14, 124, 107, 0.05);
+}
+.demo-cm .cm-activeLineGutter {
+  background: transparent;
+  color: #0e7c6b;
+}
+.demo-cm .cm-selectionBackground,
+.demo-cm .cm-editor ::selection {
+  background: #cbe7df;
+}
+/* mermaid token colors (classHighlighter tok-* classes) — light pane */
+.demo-cm .tok-heading {
+  color: #0e7c6b;
+  font-weight: 600;
+  text-decoration: none;
+}
+.demo-cm .tok-keyword {
+  color: #0a5c50;
+}
+.demo-cm .tok-operator {
+  color: #b58614;
+}
+.demo-cm .tok-string {
+  color: #a07c1e;
+}
+.demo-cm .tok-comment {
+  color: #a39d90;
+  font-style: italic;
+}
+.demo-cm .tok-number {
+  color: #6b6559;
+}
+.demo-cm .tok-bracket {
+  color: #8a857a;
+}
+.demo-cm .tok-meta {
+  color: #8a9b96;
+}
+/* dark pane variant */
+.demo-pane-dark .demo-cm .cm-content {
+  caret-color: #7fb3a8;
+  color: #ede7da;
+}
+.demo-pane-dark .demo-cm .cm-gutters {
+  color: #7a7365;
+}
+.demo-pane-dark .demo-cm .cm-activeLine {
+  background: rgba(127, 179, 168, 0.07);
+}
+.demo-pane-dark .demo-cm .cm-selectionBackground,
+.demo-pane-dark .demo-cm .cm-editor ::selection {
+  background: #2e4a44;
+}
+.demo-pane-dark .demo-cm .tok-heading {
+  color: #7fb3a8;
+}
+.demo-pane-dark .demo-cm .tok-keyword {
+  color: #9dbf8f;
+}
+.demo-pane-dark .demo-cm .tok-operator {
+  color: #c9a227;
+}
+.demo-pane-dark .demo-cm .tok-string {
+  color: #d9b95c;
+}
+.demo-pane-dark .demo-cm .tok-comment {
+  color: #8c8578;
+}
+.demo-pane-dark .demo-cm .tok-number {
+  color: #c9c2b4;
+}
+.demo-pane-dark .demo-cm .tok-bracket {
+  color: #9c968a;
+}
