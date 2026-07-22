@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>visimer playground</title>
+  </head>
+  <body>
+    <div id="app">
+      <header id="topbar">
+        <div class="brand">visimer <span class="tag">playground</span></div>
+        <div class="controls">
+          <label>Theme
+            <select id="theme">
+              <option value="default">default</option>
+              <option value="dark" selected>dark</option>
+              <option value="forest">forest</option>
+              <option value="neutral">neutral</option>
+              <option value="base">base</option>
+            </select>
+          </label>
+          <label>Accent <input type="color" id="accent" value="#818cf8" /></label>
+          <label class="chk"><input type="checkbox" id="readonly" /> Read-only</label>
+        </div>
+      </header>
+      <div id="body">
+        <aside id="sidebar"></aside>
+        <main id="main">
+          <div id="toolbar"></div>
+          <div id="canvas"></div>
+          <div id="inspector"></div>
+        </main>
+        <section id="codepanel">
+          <div class="panel-title">Mermaid source <span id="typebadge"></span></div>
+          <div id="codepane"></div>
+          <div id="statusbar"></div>
+        </section>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

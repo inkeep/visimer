@@ -1,0 +1,35 @@
+{
+  "name": "playground",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@codemirror/commands": "^6.6.1",
+    "@codemirror/language": "^6.10.3",
+    "@codemirror/state": "^6.4.1",
+    "@codemirror/view": "^6.34.1",
+    "@lezer/highlight": "^1.2.1",
+    "@mermaid-js/mermaid-zenuml": "^0.2.0",
+    "@visimer/codemirror": "workspace:*",
+    "@visimer/core": "workspace:*",
+    "@visimer/dom": "workspace:*",
+    "@visimer/monaco": "workspace:*",
+    "@visimer/react": "workspace:*",
+    "mermaid": "^11.6.0",
+    "monaco-editor": "^0.55.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.6.3",
+    "vite": "^6.3.5"
+  }
+}

@@ -1,0 +1,185 @@
+/* Open Knowledge design tokens (dark): neutral oklch grays, azure/sky brand
+   blues, Inter + JetBrains Mono, 0.625rem base radius. */
+:root {
+  --bg: oklch(0.145 0 0);
+  --panel: oklch(0.205 0 0);
+  --panel-2: oklch(0.269 0 0);
+  --border: oklch(1 0 0 / 10%);
+  --border-strong: oklch(1 0 0 / 15%);
+  --fg: oklch(0.985 0 0);
+  --dim: oklch(0.708 0 0);
+  --dimmer: oklch(0.556 0 0);
+  --blue: #69a3ff; /* sky blue: OK's dark-mode --primary */
+  --azure: #3784ff; /* brand azure */
+  --green: oklch(0.73 0.13 145);
+  --red: oklch(0.704 0.191 22.216);
+  --radius: 0.625rem;
+  --sans: "Inter Variable", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { margin: 0; height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px/1.5 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+.app { display: flex; flex-direction: column; height: 100vh; }
+
+/* top bar */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  height: 48px; padding: 0 16px; border-bottom: 1px solid var(--border);
+  background: var(--bg); flex: 0 0 auto;
+}
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 14px; letter-spacing: -0.01em; }
+.brand .logo {
+  width: 16px; height: 16px; border-radius: 5px;
+  background: linear-gradient(135deg, var(--azure), var(--blue));
+}
+.brand .sep { color: var(--border-strong); font-weight: 400; }
+.brand .sub { color: var(--dim); font-weight: 400; }
+.topbar .controls { display: flex; align-items: center; gap: 8px; color: var(--dim); font-size: 13px; }
+.topbar a { color: var(--dim); text-decoration: none; font-size: 13px; }
+.topbar a:hover { color: var(--fg); }
+
+/* layout */
+.body { display: flex; flex: 1 1 auto; min-height: 0; }
+
+.sidebar {
+  width: 220px; flex: 0 0 auto; overflow-y: auto; padding: 12px 8px;
+  border-right: 1px solid var(--border); background: var(--bg);
+}
+.side-label {
+  font-size: 11px; font-weight: 500; color: var(--dimmer);
+  text-transform: uppercase; letter-spacing: 0.06em; padding: 4px 8px 8px;
+}
+.side-item {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  background: none; border: none; color: var(--dim); text-align: left;
+  padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 13px; font-family: var(--sans);
+}
+.side-item:hover { background: var(--panel-2); color: var(--fg); }
+.side-item.active { background: var(--panel-2); color: var(--fg); }
+.dot { width: 6px; height: 6px; border-radius: 99px; flex: 0 0 auto; }
+.dot.edit { background: var(--green); }
+.dot.render { background: var(--border-strong); }
+.legend { display: flex; gap: 12px; padding: 12px 8px 4px; color: var(--dimmer); font-size: 11px; }
+.legend span { display: flex; align-items: center; gap: 5px; }
+
+.main { flex: 1 1 56%; display: flex; flex-direction: column; min-width: 0; }
+
+/* toolbar */
+.toolbar {
+  display: flex; align-items: center; gap: 6px; padding: 8px 12px;
+  border-bottom: 1px solid var(--border); background: var(--bg); flex: 0 0 auto;
+  flex-wrap: wrap;
+}
+.toolbar.disabled { opacity: 0.4; pointer-events: none; }
+.spacer { flex: 1; }
+
+button, select {
+  height: 30px; padding: 0 12px; border-radius: 6px; font-size: 13px; font-family: var(--sans);
+  background: var(--bg); color: var(--fg); border: 1px solid var(--border-strong);
+  cursor: pointer; transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+button:hover:not(:disabled), select:hover { border-color: oklch(1 0 0 / 25%); }
+button:disabled { color: var(--dimmer); cursor: default; }
+button.primary { background: var(--fg); color: var(--bg); border-color: var(--fg); font-weight: 500; }
+button.primary:hover { background: oklch(0.9 0 0); border-color: oklch(0.9 0 0); }
+button.danger:hover { border-color: var(--red); color: var(--red); }
+select { appearance: none; padding-right: 26px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23a1a1a1' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 8px center; }
+
+.switch { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--dim); cursor: pointer; }
+
+/* canvas */
+.canvas {
+  flex: 1 1 auto; min-height: 0;
+  background-image: radial-gradient(circle at 1px 1px, oklch(0.24 0 0) 1px, transparent 0);
+  background-size: 24px 24px;
+  --mw-accent: var(--blue);
+  --mw-editor-bg: var(--panel-2);
+  --mw-editor-fg: var(--fg);
+  --mw-chrome-bg: var(--panel);
+  --mw-chrome-border: var(--border-strong);
+  --mw-chrome-fg: var(--fg);
+  --mw-chrome-hover: oklch(0.269 0 0);
+  --mw-chrome-dim: var(--dim);
+}
+.canvas:focus { outline: none; }
+
+/* mermaid svg polish (rx/ry as CSS works in Chromium/WebKit) */
+.canvas svg .node rect:not(.mw-noround), .canvas svg rect.actor { rx: 6px; ry: 6px; }
+.canvas svg .cluster rect { rx: 8px; ry: 8px; }
+.canvas svg .edgeLabel foreignObject { overflow: visible; }
+.canvas svg span.edgeLabel:not(:empty) { border-radius: 4px; padding: 1px 6px; margin: -1px -6px; display: inline-block; }
+.canvas svg span.edgeLabel:empty { background: transparent !important; }
+
+/* code panel */
+.codepanel {
+  flex: 1 1 44%; min-width: 340px; max-width: 46%;
+  display: flex; flex-direction: column; border-left: 1px solid var(--border);
+}
+.panel-title {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 14px; border-bottom: 1px solid var(--border);
+  font-size: 11px; font-weight: 500; color: var(--dimmer);
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.panel-title-left { display: flex; align-items: center; gap: 10px; }
+.seg {
+  display: inline-flex; padding: 2px; gap: 2px;
+  border: 1px solid var(--border); border-radius: 6px; background: var(--panel);
+}
+.seg button {
+  height: 20px; padding: 0 8px; border: none; border-radius: 4px;
+  font-size: 11px; letter-spacing: 0; text-transform: none;
+  background: transparent; color: var(--dim);
+}
+.seg button:hover { border: none; color: var(--fg); }
+.seg button.on { background: oklch(0.269 0 0); color: var(--fg); }
+.badge {
+  font-size: 11px; text-transform: none; letter-spacing: 0; font-weight: 500;
+  padding: 2px 8px; border-radius: 99px; border: 1px solid var(--border-strong); color: var(--dim);
+}
+.badge.edit { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, transparent); }
+
+.codepane { flex: 1 1 auto; min-height: 0; position: relative; }
+.codepane .cm-editor { height: 100%; background: transparent; color: var(--fg); }
+.codepane .cm-editor.cm-focused { outline: none; }
+.codepane .cm-scroller { font: 13px/1.6 var(--mono); }
+.codepane .cm-content { caret-color: var(--blue); }
+.codepane .cm-cursor { border-left-color: var(--blue); }
+.codepane .cm-gutters { background: var(--bg); color: var(--dimmer); border-right: 1px solid var(--border); }
+.codepane .cm-activeLine { background: #ffffff08; }
+.codepane .cm-activeLineGutter { background: transparent; color: var(--dim); }
+.codepane .cm-selectionBackground, .codepane .cm-editor ::selection { background: #ffffff22 !important; }
+
+.codepane .tok-comment { color: var(--dimmer); font-style: italic; }
+.codepane .tok-string { color: #f8b886; }
+.codepane .tok-keyword { color: #bf7af0; }
+.codepane .tok-heading { color: var(--blue); font-weight: 700; }
+.codepane .tok-operator { color: #62dfa8; }
+.codepane .tok-number { color: #ff8fa3; }
+.codepane .tok-bracket { color: var(--dim); }
+.codepane .tok-meta { color: #56d4dd; }
+
+.codepane .monaco-editor, .codepane .monaco-editor .margin { background: var(--bg); }
+.mw-monaco-entity {
+  background: color-mix(in srgb, var(--blue) 28%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--blue) 55%, transparent);
+  border-radius: 3px;
+}
+
+.statusbar {
+  padding: 8px 14px; border-top: 1px solid var(--border);
+  font: 12px/1.4 var(--mono); flex: 0 0 auto;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.statusbar .ok { color: var(--green); }
+.statusbar .err { color: var(--red); }

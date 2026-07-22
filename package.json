@@ -1,0 +1,27 @@
+{
+  "name": "visimer-monorepo",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "dev": "pnpm --filter playground dev",
+    "build": "pnpm -r --filter './packages/*' build",
+    "test": "pnpm -r run test",
+    "typecheck": "pnpm -r typecheck",
+    "dev:js": "pnpm --filter js-playground dev",
+    "dev:site": "pnpm --filter site dev",
+    "build:site": "pnpm --filter site build",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "pnpm build && changeset publish"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1",
+    "typescript": "^5.6.3",
+    "@changesets/cli": "^2.27.10"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}

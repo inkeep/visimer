@@ -1,0 +1,60 @@
+{
+  "name": "@visimer/react",
+  "version": "0.1.0",
+  "description": "React bindings for visimer: a drop-in visual Mermaid editor component and hooks.",
+  "type": "module",
+  "main": "./src/index.tsx",
+  "types": "./src/index.tsx",
+  "exports": {
+    ".": "./src/index.tsx"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "tsup src/index.tsx --format esm --dts --sourcemap --out-dir dist --external react"
+  },
+  "dependencies": {
+    "@visimer/core": "workspace:*",
+    "@visimer/dom": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "react": "^18.3.1",
+    "typescript": "^5.6.3"
+  },
+  "author": "Inkeep",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/inkeep/visimer.git",
+    "directory": "packages/react"
+  },
+  "homepage": "https://github.com/inkeep/visimer#readme",
+  "bugs": "https://github.com/inkeep/visimer/issues",
+  "keywords": [
+    "mermaid",
+    "wysiwyg",
+    "diagram",
+    "editor",
+    "react",
+    "visual-editing"
+  ],
+  "sideEffects": false,
+  "license": "MIT",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      }
+    }
+  }
+}
