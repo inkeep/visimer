@@ -955,9 +955,17 @@ export default function App() {
               {'\n\n'}&lt;<span style={ident}>MermaidWysiwyg</span> <span style={str}>code</span>={'{diagram}'}{' '}
               <span style={str}>onCodeChange</span>={'{setDiagram}'} <span style={str}>mermaid</span>={'{mermaid}'} /&gt;
             </CodeCard>
-            <CodeCard title="Vanilla · -core + -dom">
-              <span style={cmt}># framework-free canvas, any app</span>
+            <CodeCard title="Vanilla · @visimer/core + @visimer/dom">
+              <span style={cmt}># npm i @visimer/core @visimer/dom mermaid</span>
               {'\n'}
+              <span style={kw}>import</span> mermaid <span style={kw}>from</span> <span style={str}>'mermaid'</span>
+              {'\n'}
+              <span style={kw}>import</span> {'{ MermaidWysiwygEditor }'} <span style={kw}>from</span>{' '}
+              <span style={str}>'@visimer/core'</span>
+              {'\n'}
+              <span style={kw}>import</span> {'{ MermaidCanvasView }'} <span style={kw}>from</span>{' '}
+              <span style={str}>'@visimer/dom'</span>
+              {'\n\n'}
               <span style={kw}>const</span> editor = <span style={kw}>new</span> <span style={ident}>MermaidWysiwygEditor</span>({'{ '}
               <span style={str}>code</span>
               {' }'})
@@ -965,12 +973,9 @@ export default function App() {
               <span style={kw}>new</span> <span style={ident}>MermaidCanvasView</span>({'{ '}
               <span style={str}>editor</span>, <span style={str}>container</span>, <span style={str}>mermaid</span>
               {' }'})
-              {'\n'}editor.<span style={ident}>on</span>(<span style={str}>'change'</span>, ({'{ '}
-              <span style={str}>code</span>
-              {' }'}) =&gt; <span style={ident}>save</span>(code))
             </CodeCard>
-            <CodeCard title="CodeMirror pane · -codemirror">
-              <span style={cmt}># the source pane in the playground above</span>
+            <CodeCard title="CodeMirror pane · @visimer/codemirror">
+              <span style={cmt}># npm i @visimer/codemirror</span>
               {'\n'}
               <span style={kw}>import</span> {'{ MermaidCodeMirror }'} <span style={kw}>from</span>{' '}
               <span style={str}>'@visimer/codemirror'</span>
@@ -979,8 +984,8 @@ export default function App() {
               {'\n'}
               <span style={cmt}># typing, highlights, undo, all shared with the canvas</span>
             </CodeCard>
-            <CodeCard title="Monaco · -monaco">
-              <span style={cmt}># bring your own monaco instance; zero monaco dependency</span>
+            <CodeCard title="Monaco · @visimer/monaco">
+              <span style={cmt}># npm i @visimer/monaco  (bring your own monaco instance)</span>
               {'\n'}
               <span style={kw}>import</span> {'{ bindMonaco }'} <span style={kw}>from</span>{' '}
               <span style={str}>'@visimer/monaco'</span>
