@@ -384,6 +384,7 @@ export default function App() {
         }}
       >
         <div
+          className="site-header-row"
           style={{
             maxWidth: 1180,
             margin: '0 auto',
@@ -408,7 +409,7 @@ export default function App() {
             <Logo size={26} />
             Visimer
           </a>
-          <nav style={{ display: 'flex', gap: 22, marginLeft: 6, fontSize: 14.5 }}>
+          <nav className="site-nav" style={{ display: 'flex', gap: 22, marginLeft: 6, fontSize: 14.5 }}>
             <a href="#demo" style={{ color: '#6B6559' }}>
               Playground
             </a>
@@ -444,6 +445,7 @@ export default function App() {
             </a>
             <div
               aria-hidden
+              className="site-star-hint"
               style={{
                 position: 'absolute',
                 top: 'calc(100% + 14px)',
