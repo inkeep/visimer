@@ -165,3 +165,16 @@ textarea {
 .demo-pane-dark .demo-cm .tok-bracket {
   color: #9c968a;
 }
+
+/* Mobile: hide the middle nav links + the "Leave a star!" hint so the
+   navbar has room for the wordmark + GitHub star + npm install button. */
+@media (max-width: 640px) {
+  .site-nav,
+  .site-star-hint {
+    display: none !important;
+  }
+  .site-header-row {
+    padding: 12px 16px !important;
+    gap: 10px !important;
+  }
+}
