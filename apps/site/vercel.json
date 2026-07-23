@@ -12,6 +12,14 @@
     {
       "source": "/ingest/:path(.*)",
       "destination": "https://us.i.posthog.com/:path*"
+    },
+    {
+      "source": "/playground",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/playground/",
+      "destination": "/index.html"
     }
   ]
 }
