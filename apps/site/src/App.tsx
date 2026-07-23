@@ -1,128 +1,21 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { flushSync } from 'react-dom'
 import mermaid from 'mermaid'
-import { EditorView } from '@codemirror/view'
-import { MermaidCodeMirror } from '@visimer/codemirror'
-import type { MermaidWysiwygEditor } from '@visimer/core'
 import { MermaidCanvas, useMermaidEditor } from '@visimer/react'
 import { track } from './analytics'
+import {
+  CodeMirrorPane,
+  Logo,
+  PRESETS,
+  TYPE_LABELS,
+  mono,
+  playgroundUrl,
+  themeConfig,
+} from './playground-shared'
 
 const REPO = 'inkeep/visimer'
 const REPO_URL = `https://github.com/${REPO}`
 const INSTALL_CMD = 'npm i @visimer/react'
 
-const PRESETS: Record<string, string> = {
-  flowchart: `flowchart LR
-    A[Write a doc] --> B{Needs a diagram?}
-    B -->|Yes| C[Click a node to edit]
-    B -->|No| D[Keep writing]
-    C --> E[Source stays in sync]`,
-  sequence: `sequenceDiagram
-    participant H as Human
-    participant E as Editor
-    participant D as Diagram
-    H->>E: Click a node
-    E->>D: Rewrite label
-    D-->>E: Re-render
-    E-->>H: Source in sync`,
-  class: `classDiagram
-    class Editor {
-      +String source
-      +render()
-      +selectNode()
-    }
-    class Diagram {
-      +Node[] nodes
-      +Edge[] edges
-    }
-    Editor --> Diagram : drives`,
-  state: `stateDiagram-v2
-    [*] --> Editing
-    Editing --> Previewing : render
-    Previewing --> Editing : click node
-    Previewing --> [*] : done`,
-  er: `erDiagram
-    DOC ||--o{ DIAGRAM : contains
-    DIAGRAM ||--|{ NODE : has
-    NODE }o--o{ EDGE : connects`,
-  gantt: `gantt
-    title Release plan
-    dateFormat YYYY-MM-DD
-    section Build
-    Editor core      :done, a1, 2026-01-01, 20d
-    Visual editing   :active, a2, after a1, 15d
-    section Ship
-    Docs             :a3, after a2, 10d
-    v1.0             :milestone, m1, after a3, 0d`,
-}
-
-const TYPE_LABELS: Record<string, string> = {
-  flowchart: 'Flowchart',
-  sequence: 'Sequence',
-  class: 'Class',
-  state: 'State',
-  er: 'ER',
-  gantt: 'Gantt',
-}
-
-const THEMES: Array<[string, string]> = [
-  ['paper', 'Paper'],
-  ['neutral', 'Neutral'],
-  ['forest', 'Forest'],
-  ['dark', 'Dark'],
-]
-
-function themeConfig(theme: string): Record<string, unknown> {
-  const base = { fontFamily: '"Inter", sans-serif' }
-  if (theme === 'paper') {
-    return {
-      theme: 'base',
-      themeVariables: {
-        ...base,
-        primaryColor: '#EAF3F0',
-        primaryBorderColor: '#0E7C6B',
-        primaryTextColor: '#1C1A17',
-        lineColor: '#8A9B96',
-        secondaryColor: '#F5E9C9',
-        secondaryBorderColor: '#C9A227',
-        tertiaryColor: '#FBF9F4',
-        tertiaryBorderColor: '#E6E0D4',
-        noteBkgColor: '#F5E9C9',
-        noteBorderColor: '#C9A227',
-      },
-    }
-  }
-  if (theme === 'neutral' || theme === 'forest' || theme === 'dark') {
-    return { theme, themeVariables: base }
-  }
-  return { theme: 'default', themeVariables: base }
-}
-
-function Logo({ size }: { size: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 26 26" fill="none" style={{ flex: 'none' }}>
-      <rect x="1" y="8.5" width="9" height="9" rx="2.4" fill="#0E7C6B" />
-      <rect x="16" y="1" width="9" height="9" rx="2.4" fill="#1C1A17" />
-      <rect x="16" y="16" width="9" height="9" rx="2.4" fill="#C9A227" />
-      <path
-        d="M10 12.2 H14 Q15 12.2 15 11.2 V6.8 Q15 5.8 16 5.8"
-        stroke="#1C1A17"
-        strokeWidth="1.6"
-        fill="none"
-        strokeLinecap="round"
-      />
-      <path
-        d="M10 13.8 H14 Q15 13.8 15 14.8 V19.2 Q15 20.2 16 20.2"
-        stroke="#C9A227"
-        strokeWidth="1.6"
-        fill="none"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
-}
-
-const mono = "'JetBrains Mono', monospace"
 
 const FEATURES: Array<{ mark: string; title: string; body: string }> = [
   {
@@ -151,23 +44,6 @@ const kw: CSSProperties = { color: '#7FB3A8' }
 const str: CSSProperties = { color: '#C9A227' }
 const ident: CSSProperties = { color: '#9DBF8F' }
 const cmt: CSSProperties = { color: '#8A9B96' }
-
-/**
- * The demo's source pane IS the published CodeMirror binding: two-way sync,
- * mermaid syntax highlighting, entity highlights on canvas selection, and the
- * engine's unified undo — nothing site-specific beyond styling.
- */
-function CodeMirrorPane({ editor }: { editor: MermaidWysiwygEditor }) {
-  const hostRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (!hostRef.current) return
-    // wrap long lines — on phones the pane is full-width but short, and a
-    // clipped line with no scroll affordance reads as missing code
-    const cm = new MermaidCodeMirror(hostRef.current, editor, [EditorView.lineWrapping])
-    return () => cm.destroy()
-  }, [editor])
-  return <div ref={hostRef} className="demo-cm" />
-}
 
 function CodeCard({ title, children }: { title: string; children: ReactNode }) {
   const preRef = useRef<HTMLPreElement>(null)
@@ -236,40 +112,15 @@ function CodeCard({ title, children }: { title: string; children: ReactNode }) {
 
 export default function App() {
   const [type, setType] = useState('flowchart')
-  const [theme, setTheme] = useState('paper')
   const [skin, setSkin] = useState<'light' | 'dark'>('light')
-  const [expanded, setExpanded] = useState(false)
-
-  // Morph the playground shell between inline and fullscreen. Chrome/Safari get
-  // the crossfade; Firefox just snaps (state update falls through unchanged).
-  // flushSync is load-bearing — the View Transitions API captures the DOM
-  // before returning, so React must commit the state update synchronously.
-  const setExpandedAnimated = (next: boolean) => {
-    if (next) track('playground_expanded')
-    if (typeof document.startViewTransition === 'function') {
-      document.startViewTransition(() => flushSync(() => setExpanded(next)))
-    } else {
-      setExpanded(next)
-    }
-  }
-
-  // fullscreen playground: Esc exits, and the page behind must not scroll
-  useEffect(() => {
-    if (!expanded) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !(e.target instanceof HTMLElement && e.target.isContentEditable)) {
-        setExpandedAnimated(false)
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    const prevOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      window.removeEventListener('keydown', onKey)
-      document.body.style.overflow = prevOverflow
-    }
-  }, [expanded])
   const { editor } = useMermaidEditor(PRESETS.flowchart)
+
+  // Expanding hands off to the dedicated /playground page, carrying the
+  // current source in the URL hash so nothing is lost in the jump.
+  const goToPlayground = () => {
+    track('playground_expanded')
+    window.location.href = playgroundUrl(editor.code)
+  }
   const [copied, setCopied] = useState(false)
   const [installCopied, setInstallCopied] = useState(false)
   const [ghStars, setGhStars] = useState<number | null>(null)
@@ -368,17 +219,6 @@ export default function App() {
     borderRadius: 8,
     cursor: 'pointer',
     transition: 'all .12s',
-  })
-  const miniPill = (active: boolean): CSSProperties => ({
-    border: `1px solid ${active ? '#0E7C6B' : chromeBorder}`,
-    background: active ? '#EAF3F0' : 'transparent',
-    color: active ? '#0A5C50' : dark ? '#9C968A' : '#6B6559',
-    fontFamily: "'Inter', sans-serif",
-    fontSize: 11.5,
-    fontWeight: 600,
-    padding: '4px 9px',
-    borderRadius: 7,
-    cursor: 'pointer',
   })
   const ghostBtn: CSSProperties = {
     border: `1px solid ${chromeBorder}`,
@@ -573,21 +413,7 @@ export default function App() {
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap', marginTop: 30 }}>
             <a
-              href="#demo"
-              onClick={(e) => {
-                e.preventDefault()
-                // Park the page at the demo section BEFORE expanding, so that
-                // when the user exits fullscreen they land on the playground
-                // instead of back at the hero. scrollTo is synchronous;
-                // scrollIntoView({smooth}) would be frozen mid-animation by
-                // the body.overflow=hidden expand triggers.
-                const demo = document.getElementById('demo')
-                // `behavior: 'instant'` overrides the html { scroll-behavior:
-                // smooth } rule; a smooth scroll here gets frozen mid-way by
-                // the body.overflow=hidden the useEffect triggers on expand.
-                if (demo) window.scrollTo({ top: demo.offsetTop - 20, behavior: 'instant' })
-                setExpandedAnimated(true)
-              }}
+              href="/playground"
               style={{
                 background: '#1C1A17',
                 border: '1px solid #1C1A17',
@@ -709,24 +535,12 @@ export default function App() {
               background: dark ? '#1A1712' : '#FCFAF5',
               border: `1px solid ${chromeBorder}`,
               overflow: 'hidden',
-              viewTransitionName: 'playground-shell',
+              borderRadius: 20,
+              boxShadow: '0 30px 70px -30px rgba(28,26,23,0.28)',
               // the mobile stylesheet needs the pane divider color (it turns the
               // pane border-right into a border-bottom); custom props aren't in
               // CSSProperties' type
               ...({ '--pg-border': chromeBorder } as CSSProperties),
-              ...(expanded
-                ? {
-                    position: 'fixed',
-                    inset: 0,
-                    zIndex: 100,
-                    borderRadius: 0,
-                    display: 'flex',
-                    flexDirection: 'column',
-                  }
-                : {
-                    borderRadius: 20,
-                    boxShadow: '0 30px 70px -30px rgba(28,26,23,0.28)',
-                  }),
             }}
           >
             <div
@@ -751,14 +565,6 @@ export default function App() {
                 className="pg-controls"
                 style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={chromeLabel}>Theme</span>
-                  {THEMES.map(([k, l]) => (
-                    <button key={k} type="button" onClick={() => setTheme(k)} style={miniPill(theme === k)}>
-                      {l}
-                    </button>
-                  ))}
-                </div>
                 <button
                   type="button"
                   onClick={() => setSkin(dark ? 'light' : 'dark')}
@@ -779,9 +585,9 @@ export default function App() {
                 <button
                   type="button"
                   className="pg-expand-btn"
-                  onClick={() => setExpandedAnimated(!expanded)}
-                  aria-label={expanded ? 'Exit full screen' : 'Expand playground to full screen'}
-                  title={expanded ? 'Exit full screen (Esc)' : 'Full screen'}
+                  onClick={goToPlayground}
+                  aria-label="Open the full playground page with the current diagram"
+                  title="Open the full playground"
                   style={{
                     border: `1px solid ${chromeBorder}`,
                     background: dark ? '#231F19' : '#FFFFFF',
@@ -794,17 +600,17 @@ export default function App() {
                     cursor: 'pointer',
                   }}
                 >
-                  {expanded ? '✕ Exit' : '⛶ Expand'}
+                  ⛶ Expand
                 </button>
               </div>
             </div>
 
             <div
-              className={expanded ? 'pg-grid pg-grid-full' : 'pg-grid'}
+              className="pg-grid"
               style={{
                 display: 'grid',
                 gridTemplateColumns: 'minmax(0, 0.9fr) minmax(0, 1.15fr)',
-                ...(expanded ? { flex: 1, minHeight: 0 } : { height: 480 }),
+                height: 480,
               }}
             >
               <div
@@ -822,7 +628,7 @@ export default function App() {
                     display: 'flex',
                     alignItems: 'center',
                     gap: 8,
-                    padding: '9px 14px',
+                    height: 44, padding: '0 14px', flex: 'none',
                     borderBottom: `1px solid ${chromeBorder}`,
                   }}
                 >
@@ -846,7 +652,7 @@ export default function App() {
                     display: 'flex',
                     alignItems: 'center',
                     gap: 8,
-                    padding: '9px 14px',
+                    height: 44, padding: '0 14px', flex: 'none',
                     borderBottom: `1px solid ${chromeBorder}`,
                   }}
                 >
@@ -862,7 +668,7 @@ export default function App() {
                   <MermaidCanvas
                     editor={editor}
                     mermaid={mermaid}
-                    mermaidConfig={themeConfig(theme)}
+                    mermaidConfig={themeConfig(skin)}
                     accentColor="#0E7C6B"
                     panZoom
                     className="site-demo-canvas"
