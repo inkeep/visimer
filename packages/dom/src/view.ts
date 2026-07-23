@@ -78,7 +78,7 @@ const BASE_CSS = `
 .mw-canvas .mw-svg-host { user-select: none; -webkit-user-select: none; }
 .mw-canvas .mw-svg-host { min-height: 100%; display: flex; align-items: flex-start; justify-content: center; padding: 16px; box-sizing: border-box; }
 .mw-canvas svg { max-width: 100%; height: auto; }
-.mw-canvas.mw-panzoom { overflow: hidden; }
+.mw-canvas.mw-panzoom { overflow: hidden; touch-action: none; }
 .mw-canvas.mw-panzoom .mw-svg-host { position: absolute; inset: 0; display: block; padding: 0; min-height: 0; overflow: hidden; }
 .mw-canvas.mw-panzoom .mw-svg-host svg { position: absolute; left: 0; top: 0; max-width: none; height: auto; transform-origin: 0 0; }
 .mw-canvas.mw-panzoom .mw-svg-host { cursor: grab; }
@@ -88,7 +88,7 @@ const BASE_CSS = `
 .mw-zoom-btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border-radius: 7px; border: 1px solid var(--mw-chrome-border, rgba(128,128,128,.35)); background: var(--mw-chrome-bg, rgba(24,24,27,.92)); color: var(--mw-chrome-fg, #e4e4e7); cursor: pointer; }
 .mw-zoom-btn:hover { background: var(--mw-chrome-hover, rgba(63,63,70,.9)); }
 .mw-zoom-btn svg { width: 14px; height: 14px; }
-.mw-canvas [data-mw-entity] { cursor: pointer; }
+.mw-canvas [data-mw-entity] { cursor: pointer; touch-action: manipulation; }
 .mw-canvas.mw-readonly [data-mw-entity] { cursor: default; }
 .mw-canvas.mw-tool-connect [data-mw-entity^="node:"] { cursor: crosshair; }
 .mw-canvas [data-mw-entity]:hover { filter: drop-shadow(0 0 3px var(--mw-accent, #6366f1)); }
@@ -116,6 +116,11 @@ const BASE_CSS = `
 .mw-canvas [contenteditable="true"] {
   outline: none; cursor: text; white-space: pre-wrap; min-width: 8px;
   caret-color: var(--mw-accent, #6366f1);
+}
+@media (pointer: coarse) {
+  .mw-zoom-controls { gap: 6px; right: 12px; bottom: 12px; }
+  .mw-zoom-btn { width: 38px; height: 38px; border-radius: 9px; }
+  .mw-zoom-btn svg { width: 17px; height: 17px; }
 }
 `
 
@@ -219,6 +224,11 @@ export class MermaidCanvasView {
   private listeners = new Map<keyof ViewEventMap, Set<(p: never) => void>>()
   private connectSource: string | null = null
   private suppressNextClick = false
+  // touch double-tap → double-click fallback (mobile Safari doesn't reliably
+  // synthesize dblclick from taps)
+  private lastPointerWasTouch = false
+  private tapTracker: { entity: string; time: number } | null = null
+  private suppressDblClickUntil = 0
   private ghostPath: SVGLineElement | null = null
   private dragEvent: string | null = null
   private dragStartY = 0
@@ -404,7 +414,26 @@ export class MermaidCanvasView {
     this.container.addEventListener('wheel', onWheel, { passive: false })
     this.disposers.push(() => this.container.removeEventListener('wheel', onWheel))
 
+    // two-finger pinch (touch). Tracked before the background-only pan check —
+    // a pinch is a zoom no matter what the fingers land on.
+    const touchPts = new Map<number, { x: number; y: number }>()
+    let pinchDist = 0
+
     const onDown = (e: PointerEvent) => {
+      if (e.pointerType === 'touch') {
+        touchPts.set(e.pointerId, { x: e.clientX, y: e.clientY })
+        if (touchPts.size === 2) {
+          const [a, b] = [...touchPts.values()]
+          pinchDist = Math.hypot(a.x - b.x, a.y - b.y)
+          // the first finger may have opened a pan session — the gesture is
+          // a pinch now, so drop it and make sure its release selects nothing
+          this.panSession = null
+          this.container.classList.remove('mw-panning')
+          this.suppressNextClick = true
+          this.popover.hide()
+          return
+        }
+      }
       if (e.button !== 0) return
       if (this.tool === 'connect' || e.altKey) return
       if (this.inlineInput || this.inPlaceSession) return
@@ -419,6 +448,19 @@ export class MermaidCanvasView {
       this.panSession = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, tx: this.zoomTx, ty: this.zoomTy, moved: false }
     }
     const onMove = (e: PointerEvent) => {
+      if (e.pointerType === 'touch' && touchPts.has(e.pointerId)) {
+        touchPts.set(e.pointerId, { x: e.clientX, y: e.clientY })
+        if (touchPts.size >= 2 && pinchDist > 0) {
+          const [a, b] = [...touchPts.values()]
+          const d = Math.hypot(a.x - b.x, a.y - b.y)
+          if (d > 0) {
+            this.zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, d / pinchDist)
+            pinchDist = d
+            this.suppressNextClick = true
+          }
+          return
+        }
+      }
       const pan = this.panSession
       if (!pan || e.pointerId !== pan.pointerId) return
       const dx = e.clientX - pan.x
@@ -441,6 +483,10 @@ export class MermaidCanvasView {
       }
     }
     const onUp = (e: PointerEvent) => {
+      if (e.pointerType === 'touch') {
+        touchPts.delete(e.pointerId)
+        if (touchPts.size < 2) pinchDist = 0
+      }
       const pan = this.panSession
       if (!pan || e.pointerId !== pan.pointerId) return
       this.panSession = null
@@ -743,6 +789,20 @@ export class MermaidCanvasView {
     if (this.inlineInput || this.inPlaceSession) return
     const hit = this.entityHitFromEvent(e)
     if (hit) {
+      // two quick taps on the same entity are a double-click: route through
+      // the dblclick handler (label edit, class members, ER attributes) and
+      // eat the native dblclick if this browser also synthesizes one
+      if (this.lastPointerWasTouch && !this.readOnly) {
+        const now = Date.now()
+        const prev = this.tapTracker
+        this.tapTracker = { entity: hit.id, time: now }
+        if (prev && prev.entity === hit.id && now - prev.time < 400) {
+          this.tapTracker = null
+          this.onSvgDblClick(e)
+          this.suppressDblClickUntil = now + 500
+          return
+        }
+      }
       const entity = hit.id
       this.hooks.onEntityClick?.(entity, e)
       // several elements can share one entity id (a sequence participant is
@@ -777,6 +837,8 @@ export class MermaidCanvasView {
 
   private onSvgDblClick(e: MouseEvent) {
     if (this.readOnly) return
+    // the touch double-tap fallback already handled this gesture
+    if (Date.now() < this.suppressDblClickUntil) return
     // class members are editable rows inside the class box
     const memberEl = (e.target as Element).closest?.('[data-mw-member-line]')
     if (memberEl && this.editor.result.classGraph) {
@@ -890,6 +952,9 @@ export class MermaidCanvasView {
   }
 
   private onSvgPointerUp(e: PointerEvent) {
+    // clicks fire after pointerup and (on Safari <16.4) carry no pointerType,
+    // so remember what kind of pointer produced the upcoming click
+    this.lastPointerWasTouch = e.pointerType === 'touch'
     if (this.dragEvent) {
       const dragged = this.dragEvent
       const wasDragging = this.dragging

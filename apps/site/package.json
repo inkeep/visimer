@@ -9,11 +9,13 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@codemirror/view": "^6.43.6",
     "@visimer/codemirror": "workspace:*",
     "@visimer/core": "workspace:*",
     "@visimer/dom": "workspace:*",
     "@visimer/react": "workspace:*",
     "mermaid": "^11.6.0",
+    "posthog-js": "^1.407.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

@@ -244,4 +244,12 @@ export const POPOVER_CSS = `
   transition: background 0.12s, color 0.12s;
 }
 .mw-plus-menu button:hover { background: var(--mw-chrome-hover, #1f1f1f); color: var(--mw-chrome-fg, #ededed); }
+@media (pointer: coarse) {
+  .mw-popover { padding: 5px; gap: 3px; }
+  .mw-popover-btn { height: 38px; min-width: 38px; padding: 0 9px; }
+  .mw-popover-btn svg { width: 17px; height: 17px; }
+  .mw-popover-cell { padding: 11px 12px; font-size: 13px; }
+  .mw-lifeline-plus { width: 26px; height: 26px; font-size: 15px; }
+  .mw-plus-menu button { padding: 10px 12px; font-size: 13px; }
+}
 `
