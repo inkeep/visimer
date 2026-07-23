@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { flushSync } from 'react-dom'
 import mermaid from 'mermaid'
+import { EditorView } from '@codemirror/view'
 import { MermaidCodeMirror } from '@visimer/codemirror'
 import type { MermaidWysiwygEditor } from '@visimer/core'
 import { MermaidCanvas, useMermaidEditor } from '@visimer/react'
+import { track } from './analytics'
 
 const REPO = 'inkeep/visimer'
 const REPO_URL = `https://github.com/${REPO}`
@@ -126,22 +128,22 @@ const FEATURES: Array<{ mark: string; title: string; body: string }> = [
   {
     mark: '⇄',
     title: 'Two-way sync',
-    body: 'Type Mermaid or edit visually. Source and canvas stay in lockstep, always.',
+    body: 'Type Mermaid or edit visually. Both stay in lockstep.',
   },
   {
     mark: '⊹',
     title: 'Click to edit',
-    body: 'Select any node to rename, reshape, or restyle it. No hunting through syntax for one label.',
+    body: 'Select any node to rename, reshape, or restyle it.',
   },
   {
     mark: '❖',
     title: 'Minimal diffs',
-    body: 'Every gesture compiles to the smallest possible text edit. Comments and formatting are never touched.',
+    body: 'Every gesture becomes the smallest possible text edit.',
   },
   {
     mark: '{}',
     title: 'Framework-agnostic',
-    body: 'A headless core with React, vanilla DOM, CodeMirror, and Monaco bindings. Drop it into anything.',
+    body: 'Bindings for React, DOM, CodeMirror, and Monaco.',
   },
 ]
 
@@ -159,7 +161,9 @@ function CodeMirrorPane({ editor }: { editor: MermaidWysiwygEditor }) {
   const hostRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!hostRef.current) return
-    const cm = new MermaidCodeMirror(hostRef.current, editor)
+    // wrap long lines — on phones the pane is full-width but short, and a
+    // clipped line with no scroll affordance reads as missing code
+    const cm = new MermaidCodeMirror(hostRef.current, editor, [EditorView.lineWrapping])
     return () => cm.destroy()
   }, [editor])
   return <div ref={hostRef} className="demo-cm" />
@@ -171,6 +175,7 @@ function CodeCard({ title, children }: { title: string; children: ReactNode }) {
   const copy = () => {
     const text = preRef.current?.textContent ?? ''
     void navigator.clipboard?.writeText(text)
+    track('recipe_copied', { recipe: title })
     setCopied(true)
     window.setTimeout(() => setCopied(false), 1400)
   }
@@ -240,6 +245,7 @@ export default function App() {
   // flushSync is load-bearing — the View Transitions API captures the DOM
   // before returning, so React must commit the state update synchronously.
   const setExpandedAnimated = (next: boolean) => {
+    if (next) track('playground_expanded')
     if (typeof document.startViewTransition === 'function') {
       document.startViewTransition(() => flushSync(() => setExpanded(next)))
     } else {
@@ -298,7 +304,25 @@ export default function App() {
   const switchType = (next: string) => {
     setType(next)
     editor.setCode(PRESETS[next], 'api')
+    track('preset_switched', { preset: next })
   }
+
+  // The activation signals: did this visitor actually edit the diagram —
+  // visually (canvas gesture) or textually (source pane)? Once per session
+  // each, so live-commit keystrokes don't spew events.
+  const editTracked = useRef({ canvas: false, code: false })
+  useEffect(() => {
+    return editor.on('change', ({ origin }) => {
+      if (origin === 'canvas' && !editTracked.current.canvas) {
+        editTracked.current.canvas = true
+        track('playground_visual_edit')
+      }
+      if (origin === 'code' && !editTracked.current.code) {
+        editTracked.current.code = true
+        track('playground_code_edit')
+      }
+    })
+  }, [editor])
 
   useEffect(() => {
     fetch(`https://api.github.com/repos/${REPO}`)
@@ -316,6 +340,7 @@ export default function App() {
 
   const copyInstall = () => {
     void navigator.clipboard?.writeText(INSTALL_CMD)
+    track('install_copied')
     setInstallCopied(true)
     window.setTimeout(() => setInstallCopied(false), 1400)
   }
@@ -544,10 +569,9 @@ export default function App() {
               textWrap: 'pretty',
             }}
           >
-            A WYSIWYG editor for Mermaid diagrams. Click a node to rename or reshape it. Perfect for polishing
-            AI-generated diagrams.
+            Click a node to edit it. Perfect for polishing AI-generated diagrams.
           </p>
-          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap', marginTop: 30 }}>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap', marginTop: 30 }}>
             <a
               href="#demo"
               onClick={(e) => {
@@ -566,11 +590,13 @@ export default function App() {
               }}
               style={{
                 background: '#1C1A17',
+                border: '1px solid #1C1A17',
                 color: '#F7F4ED',
                 padding: '13px 22px',
                 borderRadius: 11,
                 fontWeight: 600,
                 fontSize: 15,
+                lineHeight: '20px',
                 cursor: 'pointer',
               }}
             >
@@ -588,6 +614,7 @@ export default function App() {
                 borderRadius: 11,
                 fontWeight: 600,
                 fontSize: 15,
+                lineHeight: '20px',
               }}
             >
               Try with Open Knowledge ↗
@@ -602,6 +629,7 @@ export default function App() {
                 borderRadius: 11,
                 fontWeight: 600,
                 fontSize: 15,
+                lineHeight: '20px',
               }}
             >
               Install
@@ -673,8 +701,7 @@ export default function App() {
               Take it for a spin.
             </h2>
             <p style={{ color: '#544F47', fontSize: 17, maxWidth: 560, margin: '12px auto 0', textWrap: 'pretty' }}>
-              This is the real editor running in your browser. Pick a diagram type, edit the source, click nodes.
-              Nothing to install.
+              The real editor, running in your browser. Nothing to install.
             </p>
           </div>
           <div
@@ -683,6 +710,10 @@ export default function App() {
               border: `1px solid ${chromeBorder}`,
               overflow: 'hidden',
               viewTransitionName: 'playground-shell',
+              // the mobile stylesheet needs the pane divider color (it turns the
+              // pane border-right into a border-bottom); custom props aren't in
+              // CSSProperties' type
+              ...({ '--pg-border': chromeBorder } as CSSProperties),
               ...(expanded
                 ? {
                     position: 'fixed',
@@ -699,6 +730,7 @@ export default function App() {
             }}
           >
             <div
+              className="pg-toolbar"
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -708,14 +740,17 @@ export default function App() {
                 borderBottom: `1px solid ${chromeBorder}`,
               }}
             >
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <div className="pg-presets" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {Object.keys(TYPE_LABELS).map((k) => (
                   <button key={k} type="button" onClick={() => switchType(k)} style={pill(type === k)}>
                     {TYPE_LABELS[k]}
                   </button>
                 ))}
               </div>
-              <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+              <div
+                className="pg-controls"
+                style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}
+              >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={chromeLabel}>Theme</span>
                   {THEMES.map(([k, l]) => (
@@ -743,6 +778,7 @@ export default function App() {
                 </button>
                 <button
                   type="button"
+                  className="pg-expand-btn"
                   onClick={() => setExpandedAnimated(!expanded)}
                   aria-label={expanded ? 'Exit full screen' : 'Expand playground to full screen'}
                   title={expanded ? 'Exit full screen (Esc)' : 'Full screen'}
@@ -764,6 +800,7 @@ export default function App() {
             </div>
 
             <div
+              className={expanded ? 'pg-grid pg-grid-full' : 'pg-grid'}
               style={{
                 display: 'grid',
                 gridTemplateColumns: 'minmax(0, 0.9fr) minmax(0, 1.15fr)',
@@ -778,7 +815,7 @@ export default function App() {
                   background: paneBg,
                   borderRight: `1px solid ${chromeBorder}`,
                 }}
-                className={dark ? 'demo-pane demo-pane-dark' : 'demo-pane'}
+                className={dark ? 'pg-code-pane demo-pane demo-pane-dark' : 'pg-code-pane demo-pane'}
               >
                 <div
                   style={{
@@ -814,7 +851,12 @@ export default function App() {
                   }}
                 >
                   <span style={{ fontSize: 12.5, fontWeight: 600, color: paneText }}>Preview</span>
-                  <span style={chromeLabel}>click to select · double-click to edit · drag empty space to pan · pinch to zoom</span>
+                  <span className="pg-hint-long" style={chromeLabel}>
+                    click to select · double-click to edit · drag empty space to pan · pinch to zoom
+                  </span>
+                  <span className="pg-hint-short" style={chromeLabel}>
+                    tap to select · double-tap to edit · pinch to zoom
+                  </span>
                 </div>
                 <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>
                   <MermaidCanvas
@@ -856,7 +898,7 @@ export default function App() {
             Diagrams you can actually touch.
           </h2>
           <p style={{ textAlign: 'center', color: '#544F47', fontSize: 17, maxWidth: 560, margin: '14px auto 0', textWrap: 'pretty' }}>
-            Everything a human needs to fix a diagram fast, without re-learning Mermaid syntax to move one arrow.
+            Fix a diagram fast. No re-learning Mermaid syntax to move one arrow.
           </p>
           <div
             style={{
@@ -890,41 +932,6 @@ export default function App() {
               </div>
             ))}
           </div>
-          <div
-            style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: 8,
-              justifyContent: 'center',
-              marginTop: 26,
-            }}
-          >
-            {[
-              'read-only mode',
-              'error-tolerant rendering',
-              'drag-to-connect',
-              'drag to reorder messages',
-              'unified undo across code + canvas',
-              'code ⇄ canvas selection sync',
-              'renders through your mermaid instance',
-              'entity hooks',
-            ].map((chip) => (
-              <span
-                key={chip}
-                style={{
-                  fontFamily: mono,
-                  fontSize: 12,
-                  color: '#544F47',
-                  background: '#FCFAF5',
-                  border: '1px solid #E6E0D4',
-                  borderRadius: 999,
-                  padding: '5px 12px',
-                }}
-              >
-                {chip}
-              </span>
-            ))}
-          </div>
         </section>
 
         <section id="install" style={{ maxWidth: 1000, margin: '0 auto', padding: '64px 26px 30px' }}>
@@ -941,10 +948,9 @@ export default function App() {
             Add it to your own editor.
           </h2>
           <p style={{ textAlign: 'center', color: '#544F47', fontSize: 17, maxWidth: 600, margin: '0 auto 30px' }}>
-            The playground above is this exact package. One headless engine with React, vanilla DOM, CodeMirror,
-            and Monaco bindings. Six recipes cover the whole surface.
+            The playground above is this exact package. Six recipes cover it all.
           </p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 16 }}>
             <CodeCard title="React · @visimer/react">
               <span style={cmt}># npm i @visimer/react</span>
               {'\n'}

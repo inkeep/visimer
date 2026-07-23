@@ -179,6 +179,69 @@ textarea {
   }
 }
 
+/* Playground on narrow screens: the side-by-side panes squeeze into unusable
+   slivers, so stack them — code on top, canvas below — and turn the wrapping
+   toolbar chip rows into horizontally scrollable strips. The playground's
+   layout styles are inline (per-skin colors), hence the !importants. */
+.pg-hint-short {
+  display: none;
+}
+@media (max-width: 720px) {
+  #demo {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+  .pg-toolbar {
+    flex-direction: column;
+    align-items: stretch !important;
+    flex-wrap: nowrap !important;
+    gap: 8px !important;
+  }
+  .pg-presets,
+  .pg-controls {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    margin-left: 0 !important;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .pg-presets::-webkit-scrollbar,
+  .pg-controls::-webkit-scrollbar {
+    display: none;
+  }
+  .pg-presets button,
+  .pg-controls button,
+  .pg-controls span {
+    flex: none;
+    white-space: nowrap;
+  }
+  .pg-controls {
+    gap: 8px !important;
+  }
+  .pg-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: 190px minmax(0, 1fr);
+  }
+  .pg-grid:not(.pg-grid-full) {
+    height: min(620px, 80dvh) !important;
+  }
+  .pg-code-pane {
+    border-right: none !important;
+    border-bottom: 1px solid var(--pg-border, #e6e0d4);
+  }
+  .pg-hint-long {
+    display: none;
+  }
+  .pg-hint-short {
+    display: inline;
+  }
+  /* No Esc key on a phone: the Expand/Exit toggle must never hide at the far
+     end of the scrollable controls strip. */
+  .pg-expand-btn {
+    order: -1;
+  }
+}
+
 /* CodeCard scrollbars: subtle, tinted to the card chrome (bg #1E1B16, border #2E2A22). */
 .code-card-scroll {
   scrollbar-width: thin;
