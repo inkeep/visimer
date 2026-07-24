@@ -11,6 +11,8 @@ Type in the code; the canvas follows live. One document, two surfaces, zero lock
 [![Mermaid 11](https://img.shields.io/badge/mermaid-v11-ff3670.svg)](https://mermaid.js.org)
 [![Types](https://img.shields.io/badge/types-included-3178c6.svg)](#packages)
 
+![Editing a node label and drawing a new edge; source updates on every gesture](./assets/hero-loop.webp)
+
 </div>
 
 ---
