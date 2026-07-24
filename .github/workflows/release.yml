@@ -1,0 +1,151 @@
+name: Publish
+
+# Responsibility split (see agents-private for the other half):
+#
+#   agents-private  -> owns the "Version Packages (visimer)" PR for the 5
+#                      @visimer/* packages. When that PR merges, copybara
+#                      syncs the version bumps here and deletes the
+#                      .changeset/*.md files.
+#   inkeep/visimer  -> THIS file. On push to main with no pending
+#                      changesets, publish the bumped packages to npm via
+#                      Trusted Publishing (OIDC).
+#
+# We intentionally do NOT create Version Packages PRs here. A .changeset/*.md
+# on main means copybara hasn't caught up yet (or someone added a changeset
+# directly to this repo — shouldn't happen). Either way this workflow no-ops
+# on that run; the next sync consumes the changesets once the corresponding
+# Version PR merges on agents-private.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".changeset/**"
+      - "packages/**"
+    branches:
+      - main
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: visimer-publish
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4
+
+      - name: Setup Node for OIDC publishing
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version: "22"
+          cache: pnpm
+          registry-url: "https://registry.npmjs.org"
+
+      # Pinned to the 11.x line (registry tag next-11), not latest: npm 12.0.0
+      # ships without the bundled sigstore module libnpmpublish requires, so
+      # provenance publishes fail with MODULE_NOT_FOUND. Bump only after
+      # verifying a provenance publish works on the new major.
+      - name: Ensure npm 11.5.1+ for OIDC support
+        run: |
+          if npm install -g npm@11 2>/dev/null; then
+            echo "npm upgraded via bundled npm"
+          else
+            echo "::warning::Bundled npm broken, bootstrapping from tarball"
+            NPM_VER=$(node -e "fetch('https://registry.npmjs.org/npm/next-11').then(r=>r.json()).then(d=>console.log(d.version))")
+            curl -fsSL "https://registry.npmjs.org/npm/-/npm-${NPM_VER}.tgz" | tar xz -C /tmp
+            node /tmp/package/bin/npm-cli.js install -g "npm@${NPM_VER}"
+            rm -rf /tmp/package
+          fi
+          echo "npm $(npm --version)"
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Detect changesets
+        id: detect
+        run: |
+          count=$(find .changeset -maxdepth 1 -name '*.md' -not -name 'README.md' -type f 2>/dev/null | wc -l | tr -d ' ')
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          if [ "$count" -gt 0 ]; then
+            echo "has_changesets=true" >> "$GITHUB_OUTPUT"
+            echo "Found $count pending changeset(s). Agents-private owns Version Packages PR creation; skipping publish."
+          else
+            echo "has_changesets=false" >> "$GITHUB_OUTPUT"
+            echo "No pending changesets; will attempt to publish any unreleased versions."
+          fi
+
+      # "Version PR got merged on agents-private, copybara delivered the
+      # bump, now ship it." `changeset publish` is idempotent — versions
+      # already on npm no-op, so re-running this workflow is always safe.
+      - name: Publish
+        id: publish
+        if: steps.detect.outputs.has_changesets == 'false'
+        run: |
+          set -euo pipefail
+          # --provenance required for npm Trusted Publishing attestations.
+          pnpm changeset publish --provenance | tee /tmp/publish.log
+
+          # Changesets emits "packages published successfully" after >=1
+          # package ships; a no-op run (nothing ahead of npm) does not.
+          if ! grep -q "packages published successfully" /tmp/publish.log; then
+            echo "Nothing published — all package versions already on npm."
+            exit 0
+          fi
+
+          # All @visimer/* packages share a version (fixed group in
+          # .changeset/config.json), so core's package.json is authoritative.
+          VERSION=$(node -p "require('./packages/core/package.json').version")
+
+          # Ground-truth check: verify every workspace package actually
+          # resolves on npm at VERSION before pushing tags. The registry
+          # read-path can lag the publish by seconds — retry with backoff.
+          MISSING=()
+          for pkg_json in packages/*/package.json; do
+            PKG_NAME=$(node -p "require('./$pkg_json').name" 2>/dev/null || echo "")
+            IS_PRIVATE=$(node -p "require('./$pkg_json').private ?? false" 2>/dev/null || echo "false")
+            [ -z "$PKG_NAME" ] && continue
+            [ "$IS_PRIVATE" = "true" ] && continue
+            FOUND=false
+            for attempt in 1 2 3 4; do
+              if npm view "$PKG_NAME@$VERSION" version >/dev/null 2>&1; then
+                FOUND=true
+                break
+              fi
+              if [ "$attempt" -lt 4 ]; then
+                sleep $((attempt * 2))
+              fi
+            done
+            if [ "$FOUND" = "false" ]; then
+              MISSING+=("$PKG_NAME")
+            fi
+          done
+
+          if [ ${#MISSING[@]} -gt 0 ]; then
+            echo "::error::Publish log reported success, but these packages are NOT on npm at v$VERSION after retries: ${MISSING[*]}"
+            echo "::error::Likely a partial publish. Re-running this workflow is safe — changeset publish is idempotent."
+            exit 1
+          fi
+
+          echo "All @visimer/* packages verified present on npm at v$VERSION."
+
+          # `changeset publish` created local tags (@visimer/core@X.Y.Z, ...);
+          # push them so the release is discoverable from the repo.
+          git push origin --tags
+        env:
+          HUSKY: 0
