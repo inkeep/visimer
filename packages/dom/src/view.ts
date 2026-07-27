@@ -497,6 +497,15 @@ export class MermaidCanvasView {
       if (pan.moved) {
         this.suppressNextClick = true
         this.updatePopover()
+      } else if (this.editor.selection.length) {
+        // Background tap that never became a pan — treat as "tap outside" and
+        // dismiss the current selection + popover. The SVG's own click handler
+        // does this too, but only when the tap lands ON the SVG. In panzoom
+        // mode the SVG is often smaller than its host div (centered with
+        // padding), so taps on the empty margin only reach the host — the
+        // click never bubbles to the SVG and the popover would otherwise
+        // stay pinned to the selected node.
+        this.editor.clearSelection('canvas')
       }
     }
     this.container.addEventListener('pointerdown', onDown)

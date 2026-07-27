@@ -216,7 +216,8 @@ textarea {
     grid-template-rows: 190px minmax(0, 1fr);
   }
   .pg-grid:not(.pg-grid-full) {
-    height: min(620px, 80dvh) !important;
+    /* svh, not dvh — see PlaygroundPage height note. */
+    height: min(620px, 80svh) !important;
   }
   .pg-code-pane {
     border-right: none !important;

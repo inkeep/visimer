@@ -149,7 +149,10 @@ export default function PlaygroundPage() {
   return (
     <div
       style={{
-        height: '100dvh',
+        // svh (not dvh) so the canvas doesn't jump when mobile browsers hide
+        // or reveal the URL bar mid-scroll. svh always reports the SHORT
+        // viewport (URL bar visible) so the height stays constant.
+        height: '100svh',
         display: 'flex',
         flexDirection: 'column',
         background: dark ? '#1A1712' : '#FCFAF5',
