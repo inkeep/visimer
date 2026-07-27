@@ -890,9 +890,11 @@ export class MermaidCanvasView {
   private onSvgPointerDown(e: PointerEvent) {
     if (this.readOnly) return
     const entity = this.entityFromEvent(e)
+    // participants are NOT alt-drag connectable: a sequence message is an
+    // ordered insertion, so connects go through the lifeline plus buttons,
+    // which carry the insertion position (see showLifelinePlus)
     const connectable =
       entity?.startsWith('node:') ||
-      entity?.startsWith('participant:') ||
       entity?.startsWith('state:') ||
       entity?.startsWith('class:') ||
       entity?.startsWith('entity:')
@@ -979,9 +981,7 @@ export class MermaidCanvasView {
         ? 'state:'
         : source.startsWith('class:')
           ? 'class:'
-          : source.startsWith('entity:')
-            ? 'entity:'
-            : 'participant:'
+          : 'entity:'
     const hit = document.elementFromPoint(e.clientX, e.clientY)
     let target: string | null = null
     let el = hit as Element | null
@@ -1002,13 +1002,6 @@ export class MermaidCanvasView {
         target: target.slice(5),
         line: this.defaultEdge.line,
         arrowEnd: this.defaultEdge.arrowEnd,
-      })
-    } else if (target && target !== source && kind === 'participant:') {
-      this.editor.dispatch({
-        type: 'seq.addMessage',
-        source: source.slice(12),
-        target: target.slice(12),
-        text: 'message',
       })
     } else if (target && target !== source && kind === 'state:') {
       this.editor.dispatch({ type: 'st.connect', source: source.slice(6), target: target.slice(6) })
@@ -1405,8 +1398,15 @@ export class MermaidCanvasView {
 
     const commit = () => {
       const value = (div.textContent ?? '').trim()
+      const hidden = this.inlineHidden?.el ?? null
       this.closeInlineEditor(false)
       if (value === current) return
+      // closeInlineEditor just re-showed the original element, which still
+      // carries the pre-edit text; the re-render that draws the committed
+      // value arrives a few hundred ms later. Patch the visible text now so
+      // the gap doesn't flash the stale label (multi-tspan wrapping collapses
+      // to one line for that moment — the render restores it).
+      if (hidden) hidden.textContent = value
       commitValue(value)
     }
     div.addEventListener('keydown', (e) => {
@@ -2084,7 +2084,7 @@ export class MermaidCanvasView {
       btn.type = 'button'
       btn.className = 'mw-lifeline-plus'
       btn.textContent = '+'
-      btn.title = 'Insert here (self message / note)'
+      btn.title = 'Click to insert here · drag to another participant to connect'
       btn.style.left = `${x}px`
       btn.style.top = `${anchor.y}px`
       btn.addEventListener('pointerenter', () => {
@@ -2094,13 +2094,120 @@ export class MermaidCanvasView {
         this.plusHovered = false
         this.scheduleLifelineClear()
       })
+      btn.addEventListener('pointerdown', (e) => {
+        // the drag starts here, not on the participant box: the plus carries
+        // the insertion position, so the new message lands exactly in this gap
+        e.stopPropagation()
+        this.beginPlusDrag(e, participantId, anchor.afterEvent)
+      })
       btn.addEventListener('click', (e) => {
         e.stopPropagation()
+        // a drag that connected (or aborted) must not also pop the menu
+        if (this.plusDragConsumedClick) {
+          this.plusDragConsumedClick = false
+          return
+        }
         this.openPlusMenu(btn, participantId, anchor.afterEvent)
       })
       this.overlayHost.appendChild(btn)
       this.plusButtons.push(btn)
     }
+  }
+
+  private plusDragConsumedClick = false
+  /** tears down an in-progress plus drag's document listeners (see destroy) */
+  private plusDragCleanup: (() => void) | null = null
+
+  /**
+   * Drag from a lifeline plus button to another participant to insert a
+   * message AT that gap (the plus's `afterEvent` anchor). Replaces the old
+   * participant alt-drag, which could only append at the end of the diagram.
+   * Below the movement threshold the gesture stays a click (menu opens).
+   */
+  private beginPlusDrag(down: PointerEvent, sourceParticipant: string, afterEvent: string | null) {
+    if (this.readOnly) return
+    const startX = down.clientX
+    const startY = down.clientY
+    let moved = false
+
+    const targetAt = (clientX: number, clientY: number): string | null => {
+      // participant boxes carry the entity attribute...
+      let el = document.elementFromPoint(clientX, clientY) as Element | null
+      while (el && el !== this.container) {
+        const entity = el.getAttribute?.('data-mw-entity')
+        if (entity?.startsWith('participant:')) return entity.slice(12)
+        el = el.parentElement
+      }
+      // ...but most of a participant's column is its lifeline: proximity-match
+      if (this.seqCorrelation) {
+        for (const [entityId, line] of this.seqCorrelation.lifelines) {
+          const r = line.getBoundingClientRect()
+          const cx = r.left + r.width / 2
+          if (Math.abs(clientX - cx) <= 24 && clientY >= r.top - 8 && clientY <= r.bottom + 8) {
+            return entityId.slice(12)
+          }
+        }
+      }
+      return null
+    }
+
+    const onMove = (e: PointerEvent) => {
+      if (!moved && Math.hypot(e.clientX - startX, e.clientY - startY) <= 4) return
+      if (!moved) {
+        moved = true
+        this.plusMenu?.remove()
+        this.plusMenu = null
+      }
+      if (!this.svg) return
+      const from = this.clientToSvg(startX, startY)
+      const to = this.clientToSvg(e.clientX, e.clientY)
+      if (!from || !to) return
+      if (!this.ghostPath) {
+        this.ghostPath = document.createElementNS('http://www.w3.org/2000/svg', 'line')
+        this.ghostPath.classList.add('mw-ghost-edge')
+        this.svg.appendChild(this.ghostPath)
+      }
+      this.ghostPath.setAttribute('x1', String(from.x))
+      this.ghostPath.setAttribute('y1', String(from.y))
+      this.ghostPath.setAttribute('x2', String(to.x))
+      this.ghostPath.setAttribute('y2', String(to.y))
+    }
+
+    const cleanup = () => {
+      this.plusDragCleanup = null
+      document.removeEventListener('pointermove', onMove)
+      document.removeEventListener('pointerup', onUp)
+      document.removeEventListener('pointercancel', onUp)
+      this.ghostPath?.remove()
+      this.ghostPath = null
+    }
+
+    const onUp = (e: PointerEvent) => {
+      cleanup()
+      if (!moved) return // plain click — the button's click handler opens the menu
+      // a click only follows when the pointer released over the button; when
+      // it doesn't, the flag must not linger and eat the NEXT real click
+      this.plusDragConsumedClick = true
+      setTimeout(() => {
+        this.plusDragConsumedClick = false
+      }, 0)
+      this.clearLifelineUi()
+      const target = targetAt(e.clientX, e.clientY)
+      // self-messages stay a deliberate menu action: the drag starts on the
+      // source's own lifeline, so a sloppy few-pixel drag would otherwise
+      // match the source's proximity zone and insert one by accident
+      if (!target || target === sourceParticipant) return
+      const res = this.editor.dispatch(
+        { type: 'seq.addMessage', source: sourceParticipant, target, text: 'message', afterEvent },
+        'canvas',
+      )
+      if (res?.created?.[0]) this.pendingEditEntity = res.created[0]
+    }
+
+    this.plusDragCleanup = cleanup
+    document.addEventListener('pointermove', onMove)
+    document.addEventListener('pointerup', onUp)
+    document.addEventListener('pointercancel', onUp)
   }
 
   private openPlusMenu(button: HTMLElement, participantId: string, afterEvent: string | null) {
@@ -2198,6 +2305,7 @@ export class MermaidCanvasView {
     this.svgTransformObserver?.disconnect()
     this.svgTransformObserver = null
     this.disposers.forEach((d) => d())
+    this.plusDragCleanup?.()
     this.closeInlineEditor(false)
     this.cancelConnect()
     this.clearLifelineUi()
