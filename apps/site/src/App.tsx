@@ -45,6 +45,47 @@ const str: CSSProperties = { color: '#C9A227' }
 const ident: CSSProperties = { color: '#9DBF8F' }
 const cmt: CSSProperties = { color: '#8A9B96' }
 
+const stroke = { stroke: 'currentColor', strokeWidth: 2.2, strokeLinecap: 'round' } as const
+
+/**
+ * Hand-drawn nudges inside the inline playground, in the same Caveat/terracotta
+ * voice as the navbar's "Leave a star!" hint. Each one lives in its own pane and
+ * points at that pane's content rather than at the chrome above it:
+ *
+ * - source sits in the code pane's flow directly under the last line of code, so
+ *   its arrow reaches up into the source no matter how tall the preset is;
+ * - preview pins to the canvas floor, clear of the zoom controls.
+ *
+ * Each arrow is drawn with its tip on the viewBox's horizontal centre (x=18 of
+ * 36) and the tail curving out towards its label, so centring the arrow in the
+ * grid lands the tip on the middle of the content it points at. The two differ
+ * only in which side the tail sweeps from, which is the side its text sits on.
+ *
+ * Both are pointer-events: none, so neither can eat a click meant for the editor.
+ */
+function PlaygroundCallout({ target }: { target: 'source' | 'preview' }) {
+  if (target === 'source') {
+    return (
+      <div className="pg-callout pg-callout-source" aria-hidden>
+        <svg className="pg-callout-arrow" viewBox="0 0 36 48" fill="none">
+          <path d="M31 41 C26 44, 15 40, 18 10" {...stroke} />
+          <path d="M18 10 L13.3 16.5 M18 10 L21.3 17.3" {...stroke} />
+        </svg>
+        <span className="pg-callout-text">Edit here</span>
+      </div>
+    )
+  }
+  return (
+    <div className="pg-callout pg-callout-preview" aria-hidden>
+      <span className="pg-callout-text">or edit here</span>
+      <svg className="pg-callout-arrow" viewBox="0 0 36 48" fill="none">
+        <path d="M5 41 C10 44, 21 40, 18 10" {...stroke} />
+        <path d="M18 10 L14.7 17.3 M18 10 L22.7 16.5" {...stroke} />
+      </svg>
+    </div>
+  )
+}
+
 function CodeCard({ title, children }: { title: string; children: ReactNode }) {
   const preRef = useRef<HTMLPreElement>(null)
   const [copied, setCopied] = useState(false)
@@ -621,7 +662,11 @@ export default function App() {
                   background: paneBg,
                   borderRight: `1px solid ${chromeBorder}`,
                 }}
-                className={dark ? 'pg-code-pane demo-pane demo-pane-dark' : 'pg-code-pane demo-pane'}
+                className={
+                  dark
+                    ? 'pg-code-pane pg-inline-pane demo-pane demo-pane-dark'
+                    : 'pg-code-pane pg-inline-pane demo-pane'
+                }
               >
                 <div
                   style={{
@@ -644,6 +689,8 @@ export default function App() {
                   </div>
                 </div>
                 <CodeMirrorPane editor={editor} />
+                <PlaygroundCallout target="source" />
+                <div className="pg-callout-filler" />
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, background: previewBg }}>
@@ -680,6 +727,7 @@ export default function App() {
                       backgroundSize: '20px 20px',
                     }}
                   />
+                  <PlaygroundCallout target="preview" />
                 </div>
               </div>
             </div>

@@ -172,6 +172,86 @@ textarea {
   }
 }
 
+/* Hand-drawn "Edit here" nudges inside the inline playground, each pointing at
+   its own pane's content rather than at the chrome above it. Scoped to the
+   inline demo (.pg-inline-pane) — /playground shares .pg-code-pane/.demo-cm and
+   is deliberately left alone. */
+/* A 1fr / auto / 1fr grid centres the arrow on the container while the label
+   hangs off to one side without pulling it off-centre — so the tip lands on the
+   middle of the content, not wherever the label's width happens to put it. */
+.pg-callout {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: end;
+  color: #c9713b;
+  pointer-events: none;
+}
+.pg-callout-arrow {
+  grid-column: 2;
+  width: 34px;
+  height: 46px;
+}
+.pg-callout-text {
+  font-family: 'Caveat', cursive;
+  /* 22px/600 keeps the label legible on every pane background: measured contrast
+     for #c9713b is >=3.4:1 on the light panes and >=4.8:1 on the dark ones. These
+     callouts are decorative (aria-hidden), so this is a visibility guideline, not
+     a WCAG SC 1.4.3 gate. */
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  margin-bottom: 7px;
+}
+
+/* Source: sits in the code pane's flow right under the last line. Letting the
+   editor size to its content (rather than filling the pane) is what keeps the
+   arrow tucked under short presets like flowchart instead of stranding it at
+   the pane floor; flex-shrink then pulls it back up for tall presets like
+   classDiagram, which scroll internally rather than pushing the callout out of
+   view. The filler eats the leftover space so the pane's background still
+   reaches the bottom. */
+.pg-inline-pane .demo-cm {
+  flex: 0 1 auto;
+}
+.pg-inline-pane .demo-cm .cm-editor {
+  height: auto;
+  max-height: 100%;
+}
+.pg-callout-filler {
+  flex: 1 1 0;
+  min-height: 0;
+}
+.pg-callout-source {
+  flex: none;
+  /* the left inset is CodeMirror's line-number gutter: excluding it makes the
+     grid centre on the code text column rather than on the pane */
+  padding: 2px 0 10px 36px;
+}
+.pg-callout-source .pg-callout-text {
+  grid-column: 3;
+  justify-self: start;
+  margin-left: 3px;
+  transform: rotate(-4deg);
+}
+
+/* Preview: spans the canvas so the grid can centre the arrow under the diagram
+   the canvas keeps centred. Nothing is painted right of the arrow (the label
+   hangs to its left), so this still clears the corner zoom controls. */
+.pg-callout-preview {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 8px;
+  z-index: 1;
+}
+.pg-callout-preview .pg-callout-text {
+  grid-column: 1;
+  justify-self: end;
+  margin-right: 3px;
+  transform: rotate(-3deg);
+}
+
 /* Playground on narrow screens: the side-by-side panes squeeze into unusable
    slivers, so stack them — code on top, canvas below — and turn the wrapping
    toolbar chip rows into horizontally scrollable strips. The playground's
@@ -218,6 +298,9 @@ textarea {
   .pg-grid:not(.pg-grid-full) {
     /* svh, not dvh — see PlaygroundPage height note. */
     height: min(620px, 80svh) !important;
+    /* the inline demo's code row also carries the "Edit here" callout, so it
+       gets that height back on top of the shared 190px of visible code */
+    grid-template-rows: 236px minmax(0, 1fr);
   }
   .pg-code-pane {
     border-right: none !important;
@@ -234,6 +317,22 @@ textarea {
   .pg-expand-btn,
   .pg-share-btn {
     order: -1;
+  }
+  /* Stacked layout: the callouts stay anchored to their panes, so only the
+     scale changes (the code row's extra height is set above). */
+  .pg-callout-text {
+    font-size: 20px;
+    margin-bottom: 5px;
+  }
+  .pg-callout-arrow {
+    width: 27px;
+    height: 36px;
+  }
+  .pg-callout-source {
+    padding: 0 0 8px 32px;
+  }
+  .pg-callout-preview {
+    bottom: 6px;
   }
 }
 
