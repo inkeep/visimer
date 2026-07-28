@@ -10,6 +10,7 @@ import {
   mono,
   playgroundUrl,
   themeConfig,
+  useCanvasControlTracking,
 } from './playground-shared'
 
 const REPO = 'inkeep/visimer'
@@ -155,6 +156,7 @@ export default function App() {
   const [type, setType] = useState('flowchart')
   const [skin, setSkin] = useState<'light' | 'dark'>('light')
   const { editor } = useMermaidEditor(PRESETS.flowchart)
+  useCanvasControlTracking()
 
   // Expanding hands off to the dedicated /playground page, carrying the
   // current source in the URL hash so nothing is lost in the jump.
@@ -705,7 +707,7 @@ export default function App() {
                 >
                   <span style={{ fontSize: 12.5, fontWeight: 600, color: paneText }}>Preview</span>
                   <span className="pg-hint-long" style={chromeLabel}>
-                    click to select · double-click to edit · drag empty space to pan · pinch to zoom
+                    click to select · double-click to edit · alt + drag to connect · pinch to zoom
                   </span>
                   <span className="pg-hint-short" style={chromeLabel}>
                     tap to select · double-tap to edit · pinch to zoom

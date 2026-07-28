@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { EditorView } from '@codemirror/view'
 import { MermaidCodeMirror } from '@visimer/codemirror'
 import type { MermaidWysiwygEditor } from '@visimer/core'
+import { track } from './analytics'
 
 /** Sample diagrams + chrome shared by the inline demo and /playground. */
 
@@ -176,6 +177,26 @@ export function CodeMirrorPane({ editor }: { editor: MermaidWysiwygEditor }) {
     return () => cm.destroy()
   }, [editor])
   return <div ref={hostRef} className="demo-cm" />
+}
+
+/**
+ * Tracks clicks on the canvas corner zoom controls (zoom in / zoom out /
+ * fit). The buttons are rendered by @visimer/dom, so the site listens by
+ * delegation instead of teaching the package about analytics.
+ */
+export function useCanvasControlTracking() {
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      const btn = (e.target as Element | null)?.closest?.('.mw-zoom-btn')
+      if (!btn) return
+      const title = btn.getAttribute('title') ?? ''
+      const control = /out/i.test(title) ? 'zoom-out' : /in\b/i.test(title) ? 'zoom-in' : 'fit'
+      track('canvas_zoom_control', { control })
+    }
+    // capture phase: the package's buttons stopPropagation on their clicks
+    document.addEventListener('click', onClick, true)
+    return () => document.removeEventListener('click', onClick, true)
+  }, [])
 }
 
 // ---- code <-> URL hash codec ----
