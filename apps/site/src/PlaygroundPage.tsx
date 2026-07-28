@@ -11,6 +11,7 @@ import {
   encodeCode,
   mono,
   themeConfig,
+  useCanvasControlTracking,
 } from './playground-shared'
 
 /**
@@ -22,6 +23,7 @@ import {
 export default function PlaygroundPage() {
   const initialCode = useMemo(() => codeFromHash(window.location.hash) ?? PRESETS.flowchart, [])
   const { editor } = useMermaidEditor(initialCode)
+  useCanvasControlTracking()
 
   const [skin, setSkin] = useState<'light' | 'dark'>('light')
   const [menuOpen, setMenuOpen] = useState(false)
@@ -312,7 +314,7 @@ export default function PlaygroundPage() {
           >
             <span style={{ fontSize: 12.5, fontWeight: 600, color: paneText }}>Preview</span>
             <span className="pg-hint-long" style={chromeLabel}>
-              click to select · double-click to edit · drag empty space to pan · pinch to zoom
+              click to select · double-click to edit · alt + drag to connect · pinch to zoom
             </span>
             <span className="pg-hint-short" style={chromeLabel}>
               tap to select · double-tap to edit · pinch to zoom

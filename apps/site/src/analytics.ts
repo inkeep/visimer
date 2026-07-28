@@ -23,6 +23,12 @@ if (key) {
 }
 
 export function track(event: string, properties?: Record<string, unknown>) {
+  // dev only: mirror event names onto the window so wiring is verifiable
+  // in the browser without a key or a network tap
+  if (import.meta.env.DEV) {
+    const w = window as unknown as { __phEvents?: string[] }
+    ;(w.__phEvents ??= []).push(event)
+  }
   if (!key) return
   posthog.capture(event, properties)
 }
