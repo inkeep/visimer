@@ -24,11 +24,30 @@ function sanitizeErrorMessage(value) {
 }
 
 function run(command, args, options = {}) {
+  // Drop inherited GIT_* repo-targeting vars: every git spawn in
+  // this script targets an explicit clone/worktree via cwd, never the repo a
+  // calling git hook belongs to. In CI these variables are unset (no-op);
+  // locally they leak from pre-push/pre-commit hooks into harnesses that
+  // import this module and break explicit-cwd git.
+  // Sanitize AFTER merging a caller-supplied env so the guarantee is
+  // unconditional — an options.env override must not reintroduce the vars.
+  const {
+    GIT_DIR: _d,
+    GIT_WORK_TREE: _w,
+    GIT_COMMON_DIR: _c,
+    GIT_INDEX_FILE: _i,
+    GIT_OBJECT_DIRECTORY: _o,
+    GIT_ALTERNATE_OBJECT_DIRECTORIES: _a,
+    GIT_NAMESPACE: _n,
+    GIT_PREFIX: _p,
+    ...cleanEnv
+  } = { ...process.env, ...options.env };
   try {
     return execFileSync(command, args, {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
       ...options,
+      env: cleanEnv,
     }).trim();
   } catch (error) {
     const stderr = sanitizeErrorMessage(error.stderr?.toString().trim() ?? '');
