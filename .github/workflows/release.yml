@@ -98,8 +98,11 @@ jobs:
         if: steps.detect.outputs.has_changesets == 'false'
         run: |
           set -euo pipefail
-          # --provenance required for npm Trusted Publishing attestations.
-          pnpm changeset publish --provenance | tee /tmp/publish.log
+          # Provenance is required for npm Trusted Publishing attestations.
+          # This repo's @changesets/cli does not know a --provenance flag
+          # (that errored the first release run), so it goes through npm
+          # config instead — npm reads it when changesets shells out.
+          pnpm changeset publish | tee /tmp/publish.log
 
           # Changesets emits "packages published successfully" after >=1
           # package ships; a no-op run (nothing ahead of npm) does not.
@@ -149,3 +152,4 @@ jobs:
           git push origin --tags
         env:
           HUSKY: 0
+          NPM_CONFIG_PROVENANCE: "true"
