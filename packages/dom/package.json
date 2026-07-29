@@ -1,6 +1,6 @@
 {
   "name": "@visimer/dom",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Interactive WYSIWYG canvas for Mermaid: renders through mermaid itself and overlays selection, drag-to-connect, inline label editing, and code sync.",
   "type": "module",
   "main": "./src/index.ts",

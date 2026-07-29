@@ -1,5 +1,11 @@
 # @visimer/core
 
+## 1.0.1
+
+### Patch Changes
+
+- 23611c0: Fix auto release.
+
 ## 1.0.0
 
 ### Major Changes
