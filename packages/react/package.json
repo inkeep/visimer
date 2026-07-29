@@ -1,6 +1,6 @@
 {
   "name": "@visimer/react",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "React bindings for visimer: a drop-in visual Mermaid editor component and hooks.",
   "type": "module",
   "main": "./src/index.tsx",

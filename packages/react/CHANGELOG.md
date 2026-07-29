@@ -1,5 +1,13 @@
 # @visimer/react
 
+## 1.0.1
+
+### Patch Changes
+
+- Updated dependencies [23611c0]
+  - @visimer/core@1.0.1
+  - @visimer/dom@1.0.1
+
 ## 1.0.0
 
 ### Major Changes
