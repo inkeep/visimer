@@ -10,6 +10,7 @@ import { pathToFileURL } from 'node:url';
 // - public/agents/.github/scripts/bridge-public-pr-to-monorepo.mjs
 // - public/agents-optional-local-dev/.github/scripts/bridge-public-pr-to-monorepo.mjs
 // - public/open-knowledge/.github/scripts/bridge-public-pr-to-monorepo.mjs
+// - public/open-knowledge-skills/.github/scripts/bridge-public-pr-to-monorepo.mjs
 const OSS_SYNC_BOT_NAME = 'inkeep-oss-sync[bot]';
 const OSS_SYNC_BOT_EMAIL = '274976938+inkeep-oss-sync[bot]@users.noreply.github.com';
 
