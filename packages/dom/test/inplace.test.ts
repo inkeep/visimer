@@ -224,3 +224,157 @@ describe('in-place label editing survives the live-commit re-render', () => {
     expect(labelOf(container, 'node:A').textContent).toBe('Write a doc')
   })
 })
+
+/**
+ * Fresh, unlabeled edges land in `openOverlayEditor` with the edge `<path>`
+ * as the anchor — its bounding box is the whole arrow and it has no text
+ * descendants. The pre-fix `findTextTarget` would widen to the parent
+ * `.edgeLabels` group and pick the FIRST text leaf there, which happens to
+ * be a sibling edge's label. The overlay then parked over an unrelated
+ * label (and hid that sibling's visibility for the duration of editing).
+ * These tests pin the new behavior: overlay opens on the arrow itself and
+ * no sibling label is disturbed.
+ */
+function makeFakeMermaidWithMixedEdges() {
+  const fake: MermaidLike = {
+    initialize() {},
+    async render(_id: string, code: string) {
+      const nodes = [...code.matchAll(/(\w+)\[([^\]]*)\]/g)]
+      // Match `A[…]? --> |label|? B[…]?` — mermaid lets the source/target
+      // brackets appear once anywhere in the source and be omitted on later
+      // references. Captures: 1 source id, 2 optional label, 3 target id.
+      const edges = [
+        ...code.matchAll(
+          /(\w+)(?:\[[^\]]*\])?\s*-->\s*(?:\|([^|]+)\|\s*)?(\w+)(?:\[[^\]]*\])?/g,
+        ),
+      ]
+      const svg = [
+        '<svg xmlns="http://www.w3.org/2000/svg">',
+        '<g class="nodes">',
+        ...nodes.map(
+          ([, id, label], i) =>
+            `<g class="node" id="flowchart-${id}-${i}"><g class="label"><foreignObject width="80" height="24">` +
+            `<div xmlns="http://www.w3.org/1999/xhtml"><span class="nodeLabel"><p>${label}</p></span></div>` +
+            `</foreignObject></g></g>`,
+        ),
+        '</g>',
+        '<g class="edgePaths">',
+        ...edges.map(
+          ([, s, , t], i) => `<path id="L_${s}_${t}_${i}" d="M0,0 L100,0"></path>`,
+        ),
+        '</g>',
+        '<g class="edgeLabels">',
+        ...edges.map(([, , label]) =>
+          // Only labeled edges get inner text — matches production Mermaid,
+          // which omits the label span entirely for bare arrows.
+          label
+            ? `<g class="edgeLabel"><foreignObject width="30" height="14"><div xmlns="http://www.w3.org/1999/xhtml"><span class="edgeLabel">${label}</span></div></foreignObject></g>`
+            : '<g class="edgeLabel"></g>',
+        ),
+        '</g>',
+        '</svg>',
+      ].join('')
+      return { svg }
+    },
+    async parse() {
+      return {}
+    },
+  }
+  return fake
+}
+
+describe('overlay editor on a fresh edge with no label', () => {
+  let editor: MermaidWysiwygEditor
+  let container: HTMLElement
+  let view: MermaidCanvasView
+
+  beforeEach(async () => {
+    vi.useFakeTimers()
+    // Two edges: A→B carries no label yet (the freshly-created arrow), while
+    // B→C carries "Yes". The pre-fix defect used the "Yes" label's rect for
+    // the A→B overlay because findTextTarget widened to the shared parent.
+    editor = new MermaidWysiwygEditor({
+      code: 'flowchart LR\n  A[Write a doc] --> B[Needs a diagram?]\n  B -->|Yes| C[Click a node to edit]\n',
+    })
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    view = new MermaidCanvasView({
+      editor,
+      container,
+      mermaid: makeFakeMermaidWithMixedEdges(),
+      debounceMs: 0,
+    })
+    await view.render()
+  })
+
+  afterEach(() => {
+    view.destroy()
+    container.remove()
+    vi.useRealTimers()
+  })
+
+  it('Enter on a fresh-edge overlay dispatches setEdgeLabel with the typed value', () => {
+    view.editEntityLabel('edge:A->B#0')
+    const overlay = document.querySelector<HTMLDivElement>('.mw-inplace-editor')
+    expect(overlay).not.toBeNull()
+    // Typing lands in the contentEditable div, which the overlay's Enter
+    // handler reads on commit. The commit flow was previously exercised only
+    // by node-editing tests, where the anchor is a rendered label element
+    // and `inlineHidden` gets set. The fresh-edge path leaves
+    // `inlineHidden === null`; pin that the commit branch still fires and
+    // updates the source with the new label.
+    if (overlay) overlay.textContent = 'wired'
+    overlay?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    expect(editor.code).toContain('|wired|')
+    expect(editor.code).toMatch(/A\[Write a doc\]\s*-->\|wired\|/)
+  })
+
+  it('Escape on a fresh-edge overlay closes without touching a nonexistent hidden element', () => {
+    view.editEntityLabel('edge:A->B#0')
+    const overlay = document.querySelector<HTMLDivElement>('.mw-inplace-editor')
+    expect(overlay).not.toBeNull()
+    // `closeInlineEditor` earlier restored `inlineHidden.el.style.visibility`
+    // unconditionally — but the fresh-edge path never populated `inlineHidden`,
+    // so a naive access would throw. Assert Escape teardown is clean.
+    expect(() => {
+      overlay?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    }).not.toThrow()
+    expect(document.querySelector('.mw-inplace-editor')).toBeNull()
+    // Source is unchanged — no commit dispatched on Escape. Check that the
+    // A→B edge specifically stayed unlabeled (the seed's `B -->|Yes| C`
+    // stays as-is).
+    expect(editor.code).toMatch(/A\[Write a doc\]\s*-->\s*B/)
+    expect(editor.code).not.toMatch(/A\[Write a doc\]\s*-->\|/)
+  })
+
+  it('does not hide the sibling edge`s label when opening the overlay', () => {
+    // sanity: entity ids present in the rendered DOM (used to pick the
+    // fresh-edge entityId below without hardcoding the correlation's
+    // internal shape).
+    const entities = [...container.querySelectorAll('[data-mw-entity]')].map(
+      (el) => `${el.getAttribute('data-mw-entity')} (${el.tagName})`,
+    )
+    // Two edges: the labeled one (B->C) has its label rendered as text; the
+    // fresh one (A->B) has an empty label. The pre-fix `findTextTarget`
+    // widened to the parent `.edgeLabels` group and returned the FIRST text
+    // leaf — the labeled sibling — and the overlay hid THAT label for the
+    // duration of editing. Post-fix, the empty path is detected and the
+    // overlay uses the arrow's midpoint — no sibling label is touched.
+    const siblingLabel = container.querySelector<HTMLElement>(
+      '[data-mw-entity="edge:B->C#0"] .edgeLabel',
+    )
+    expect(siblingLabel, `entities: ${entities.join(', ')}`).not.toBeNull()
+    const before = siblingLabel?.style.visibility ?? ''
+
+    view.editEntityLabel('edge:A->B#0')
+
+    // Overlay editor was created.
+    const overlay = document.querySelector<HTMLDivElement>('.mw-inplace-editor')
+    expect(overlay).not.toBeNull()
+
+    // Sibling label's visibility is unchanged — this is the assertion the
+    // pre-fix code would fail on: the sibling would carry `visibility: hidden`.
+    expect(siblingLabel?.style.visibility ?? '').toBe(before)
+  })
+
+})

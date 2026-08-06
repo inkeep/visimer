@@ -1071,8 +1071,8 @@ export class MermaidCanvasView {
       const edge = flowchart.edges.find((ed) => ed.entityId === entityId)
       if (!edge) return
       current = edge.label ?? ''
-      anchor = this.correlation?.edgeLabels.get(entityId) ?? this.correlation?.edges.get(entityId) ?? null
       commitValue = (v) => this.editor.dispatch({ type: 'setEdgeLabel', edgeId: entityId, label: v }, 'canvas')
+      anchor = this.edgeAnchor(entityId, Boolean(edge.label))
       if (edge.label && anchor && this.editInPlace(entityId, anchor, '.edgeLabel', current, commitValue)) return
     } else if (flowchart && entityId.startsWith('subgraph:')) {
       const sg = flowchart.subgraphs.find((s) => s.entityId === entityId)
@@ -1096,7 +1096,7 @@ export class MermaidCanvasView {
       const t = this.editor.result.state.transitions.find((tr) => tr.entityId === entityId)
       if (!t) return
       current = t.label ?? ''
-      anchor = this.correlation?.edgeLabels.get(entityId) ?? this.correlation?.edges.get(entityId) ?? null
+      anchor = this.edgeAnchor(entityId, Boolean(t.label))
       commitValue = (v) => this.editor.dispatch({ type: 'st.setTransitionLabel', transId: entityId, label: v }, 'canvas')
       if (t.label && anchor && this.editInPlace(entityId, anchor, '.edgeLabel', current, commitValue)) return
     } else if (this.editor.result.classGraph && entityId.startsWith('class:')) {
@@ -1109,7 +1109,7 @@ export class MermaidCanvasView {
       const r = this.editor.result.classGraph.relations.find((rr) => rr.entityId === entityId)
       if (!r) return
       current = r.label ?? ''
-      anchor = this.correlation?.edgeLabels.get(entityId) ?? this.correlation?.edges.get(entityId) ?? null
+      anchor = this.edgeAnchor(entityId, Boolean(r.label))
       commitValue = (v) => this.editor.dispatch({ type: 'cl.setRelationLabel', relId: entityId, label: v }, 'canvas')
     } else if (this.editor.result.er && entityId.startsWith('entity:')) {
       const e = this.editor.result.er.entityById.get(entityId.slice(7))
@@ -1121,7 +1121,7 @@ export class MermaidCanvasView {
       const r = this.editor.result.er.relations.find((rr) => rr.entityId === entityId)
       if (!r) return
       current = r.label
-      anchor = this.correlation?.edgeLabels.get(entityId) ?? this.correlation?.edges.get(entityId) ?? null
+      anchor = this.edgeAnchor(entityId, Boolean(r.label))
       commitValue = (v) => this.editor.dispatch({ type: 'er.setRelationLabel', relId: entityId, label: v }, 'canvas')
     } else if (this.editor.result.pie && entityId.startsWith('slice:')) {
       const s = this.editor.result.pie.slices.find((sl) => sl.entityId === entityId)
@@ -1361,8 +1361,28 @@ export class MermaidCanvasView {
   }
 
   private openOverlayEditor(anchor: Element, current: string, commitValue: (value: string) => void) {
-    anchor = this.findTextTarget(anchor, current)
-    const box = this.hostRect(anchor)
+    // A fresh edge whose label has never rendered comes in as its `<path>` —
+    // no text descendants, no sibling label yet. Falling through to
+    // `findTextTarget` would widen to the parent edges group and return the
+    // FIRST text leaf in that container (some OTHER edge's label), and the
+    // overlay would park over that unrelated label. Detect the empty-path
+    // case and anchor at the arrow's midpoint instead; there's no existing
+    // label to hide.
+    let box: { left: number; top: number; width: number; height: number }
+    let hideTarget: Element | null
+    // `correlation.edges` only ever holds bare `<path>` elements (see
+    // `correlate.ts` — it querySelects `.edgePaths > path` and siblings),
+    // and Mermaid `<path>` never carries element children. The
+    // `instanceof SVGPathElement` guard alone identifies the fresh-edge
+    // case cleanly.
+    if (typeof SVGPathElement !== 'undefined' && anchor instanceof SVGPathElement) {
+      box = this.pathMidpointRect(anchor)
+      hideTarget = null
+    } else {
+      anchor = this.findTextTarget(anchor, current)
+      box = this.hostRect(anchor)
+      hideTarget = anchor
+    }
     // SVG glyph paint often lives on an inner <tspan> while the outer <text>
     // carries a background-matching fill (mermaid sequence actor boxes do
     // this) — read typography and color from the innermost carrier so the
@@ -1395,11 +1415,15 @@ export class MermaidCanvasView {
     this.overlayHost.appendChild(div)
     this.inlineInput = div
 
-    // hide the original so the editor reads as the element itself
-    const target = anchor as HTMLElement | SVGElement
-    const prevVisibility = target.style?.visibility ?? ''
-    if (target.style) target.style.visibility = 'hidden'
-    this.inlineHidden = { el: target, prevVisibility }
+    // hide the original so the editor reads as the element itself — but skip
+    // when there IS no existing label (the fresh-edge path branch above), so
+    // we don't spuriously hide the invisible path itself.
+    if (hideTarget) {
+      const target = hideTarget as HTMLElement | SVGElement
+      const prevVisibility = target.style?.visibility ?? ''
+      if (target.style) target.style.visibility = 'hidden'
+      this.inlineHidden = { el: target, prevVisibility }
+    }
 
     div.focus()
     const range = document.createRange()
@@ -1488,6 +1512,24 @@ export class MermaidCanvasView {
 
   // ----- entity popover -----
 
+  /**
+   * Overlay anchor for an edge-shaped entity (flowchart edge, state
+   * transition, class/ER relation). A labeled edge prefers its rendered
+   * `.edgeLabel` group so the overlay lands on the actual glyphs; an
+   * unlabeled edge has an EMPTY `<g class="edgeLabel">` and its parent
+   * (`.edgeLabels`) holds the neighboring edges' labels — `findTextTarget`
+   * would widen to those siblings and park the overlay over an unrelated
+   * label. Preferring the edge path here lets `openOverlayEditor`'s
+   * empty-path branch anchor at the arrow's midpoint instead.
+   */
+  private edgeAnchor(entityId: string, hasLabel: boolean): Element | null {
+    const labels = this.correlation?.edgeLabels
+    const paths = this.correlation?.edges
+    return hasLabel
+      ? labels?.get(entityId) ?? paths?.get(entityId) ?? null
+      : paths?.get(entityId) ?? labels?.get(entityId) ?? null
+  }
+
   private hostRect(el: Element): { left: number; top: number; width: number; height: number } {
     const rect = el.getBoundingClientRect()
     const host = this.container.getBoundingClientRect()
@@ -1496,6 +1538,55 @@ export class MermaidCanvasView {
       top: rect.top - host.top + this.container.scrollTop,
       width: rect.width,
       height: rect.height,
+    }
+  }
+
+  /**
+   * Container-local rect anchored at the midpoint of an SVG path — the
+   * geometric center of an edge. Used for the fresh-edge-label overlay case
+   * where the edge has no rendered label element yet, so there's no
+   * `.edgeLabel` bbox to reuse and `getBoundingClientRect()` on the path
+   * itself returns the entire bounding box of the arrow (typically several
+   * hundred pixels wide), which would park the overlay somewhere unrelated
+   * to where Mermaid will place the committed label. `getPointAtLength`
+   * gives an on-path coordinate.
+   *
+   * `left` returned here IS the midpoint x (consumed as
+   * `left + width / 2 === left` with `translateX(-50%)` in the caller);
+   * `top` is shifted UP by half the returned height so the overlay's
+   * TOP edge is above the arrow and the caret sits ON it — consumer applies
+   * `top` directly without a vertical transform. Height scales with the
+   * live zoom so the box's `lineHeight` and its `fontSize` (also
+   * zoom-scaled by the consumer) stay in the same units.
+   */
+  private pathMidpointRect(path: SVGPathElement): {
+    left: number
+    top: number
+    width: number
+    height: number
+  } {
+    const host = this.container.getBoundingClientRect()
+    // Probe both DOM methods before calling either — jsdom sets neither on
+    // `SVGPathElement.prototype`, and calling an undefined method throws a
+    // TypeError that the null-check below would never see.
+    const hasGeometry =
+      typeof path.getScreenCTM === 'function' && typeof path.getTotalLength === 'function'
+    const ctm = hasGeometry ? path.getScreenCTM() : null
+    if (!ctm) {
+      // jsdom / non-conforming SVG shim — fall back to the path's own rect
+      // (still better than widening to the parent group's leaves).
+      return this.hostRect(path)
+    }
+    const len = path.getTotalLength()
+    const local = path.getPointAtLength(len / 2)
+    const screen = new DOMPoint(local.x, local.y).matrixTransform(ctm)
+    const zoom = this.panZoomEnabled ? this.zoomScale : 1
+    const height = 20 * zoom
+    return {
+      left: screen.x - host.left + this.container.scrollLeft,
+      top: screen.y - host.top + this.container.scrollTop - height / 2,
+      width: 0,
+      height,
     }
   }
 
