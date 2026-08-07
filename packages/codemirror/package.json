@@ -1,6 +1,6 @@
 {
   "name": "@visimer/codemirror",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "CodeMirror 6 binding for visimer: two-way code sync, entity highlight decorations, shared undo authority.",
   "type": "module",
   "main": "./src/index.ts",
