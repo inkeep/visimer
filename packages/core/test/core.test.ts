@@ -238,6 +238,125 @@ describe('ops → minimal text edits', () => {
     ed.dispatch({ type: 'setEdgeColor', edgeId: again.entityId, value: null })
     expect(ed.code).not.toContain('linkStyle')
   })
+
+  it('setEdgeStyle round-trips arrowStart for the double-headed arrow', () => {
+    const ed = new MermaidWysiwygEditor({ code: 'flowchart LR\n  A --> B\n' })
+    const edgeId = ed.result.flowchart!.edges[0].entityId
+    ed.dispatch({ type: 'setEdgeStyle', edgeId, arrowStart: 'arrow', arrowEnd: 'arrow' })
+    expect(ed.code).toBe('flowchart LR\n  A <--> B\n')
+    // and back
+    const edgeId2 = ed.result.flowchart!.edges[0].entityId
+    ed.dispatch({ type: 'setEdgeStyle', edgeId: edgeId2, arrowStart: 'open' })
+    expect(ed.code).toBe('flowchart LR\n  A --> B\n')
+  })
+
+  it('setEdgeStyle preserves label + line when only heads change', () => {
+    const ed = new MermaidWysiwygEditor({ code: 'flowchart LR\n  A -.->|maybe| B\n' })
+    const edgeId = ed.result.flowchart!.edges[0].entityId
+    ed.dispatch({ type: 'setEdgeStyle', edgeId, arrowStart: 'circle', arrowEnd: 'circle' })
+    expect(ed.code).toBe('flowchart LR\n  A o-.-o|maybe| B\n')
+  })
+
+  it('setEdgeStyle emits x on both ends for cross/cross', () => {
+    const ed = new MermaidWysiwygEditor({ code: 'flowchart LR\n  A --> B\n' })
+    const edgeId = ed.result.flowchart!.edges[0].entityId
+    ed.dispatch({ type: 'setEdgeStyle', edgeId, arrowStart: 'cross', arrowEnd: 'cross' })
+    expect(ed.code).toBe('flowchart LR\n  A x--x B\n')
+  })
+
+  it('setEdgeStyle promotes an invisible link to solid when a head is added', () => {
+    // Mermaid ignores head markers on `~~~` links, so without the promotion
+    // the dispatch would silently no-op and the picker would appear to
+    // accept an option that never landed.
+    const ed = new MermaidWysiwygEditor({ code: 'flowchart LR\n  A ~~~ B\n' })
+    const edgeId = ed.result.flowchart!.edges[0].entityId
+    ed.dispatch({ type: 'setEdgeStyle', edgeId, arrowEnd: 'arrow' })
+    expect(ed.code).toBe('flowchart LR\n  A --> B\n')
+  })
+
+  it('setEdgeLabel empty string preserves arrowStart on a bidirectional edge', () => {
+    // Pins the load-bearing arrowStart pass-through in the empty-label
+    // rewrite path — reverting to the 2-arg edgeOpString call would silently
+    // drop `<` and regress `<-->` to `-->`.
+    const ed = new MermaidWysiwygEditor({ code: 'flowchart LR\n  A <-->|go| B\n' })
+    const edgeId = ed.result.flowchart!.edges[0].entityId
+    ed.dispatch({ type: 'setEdgeLabel', edgeId, label: '' })
+    expect(ed.code).toBe('flowchart LR\n  A <--> B\n')
+  })
+
+  it('setEdgeAnimation merges onto an existing colored linkStyle without dropping the color', () => {
+    const ed = new MermaidWysiwygEditor({ code: 'flowchart LR\n  A --> B\n' })
+    const edgeId = ed.result.flowchart!.edges[0].entityId
+    ed.dispatch({ type: 'setEdgeColor', edgeId, value: '#06b6d4' })
+    const edgeId2 = ed.result.flowchart!.edges[0].entityId
+    ed.dispatch({ type: 'setEdgeAnimation', edgeId: edgeId2, value: 'slow' })
+    expect(ed.code).toContain('stroke:#06b6d4')
+    expect(ed.code).toContain('animation-duration:2s')
+    // both live on the same linkStyle 0 line, not two separate declarations
+    expect(ed.code.match(/linkStyle 0 /g)?.length).toBe(1)
+  })
+
+  it('setEdgeColor merges onto an existing animated linkStyle without dropping the animation', () => {
+    // Inverse direction of the merge test above — pins symmetry of
+    // patchEdgeLinkStyle so a future rewrite that made writes order-
+    // dependent would trip both cases.
+    const ed = new MermaidWysiwygEditor({ code: 'flowchart LR\n  A --> B\n' })
+    const edgeId = ed.result.flowchart!.edges[0].entityId
+    ed.dispatch({ type: 'setEdgeAnimation', edgeId, value: 'fast' })
+    const edgeId2 = ed.result.flowchart!.edges[0].entityId
+    ed.dispatch({ type: 'setEdgeColor', edgeId: edgeId2, value: '#22c55e' })
+    expect(ed.code).toContain('animation-duration:0.6s')
+    expect(ed.code).toContain('stroke:#22c55e')
+    expect(ed.code.match(/linkStyle 0 /g)?.length).toBe(1)
+  })
+
+  it('setEdgeAnimation adds/updates/clears the linkStyle animation keys', () => {
+    const ed = new MermaidWysiwygEditor({ code: 'flowchart LR\n  A --> B\n' })
+    const edgeId = ed.result.flowchart!.edges[0].entityId
+    ed.dispatch({ type: 'setEdgeAnimation', edgeId, value: 'slow' })
+    expect(ed.code).toContain('linkStyle 0 ')
+    expect(ed.code).toContain('animation-duration:2s')
+    expect(ed.code).toContain('stroke-dasharray:8')
+    // switching to fast rewrites the duration, keeps the same line
+    const edgeId2 = ed.result.flowchart!.edges[0].entityId
+    ed.dispatch({ type: 'setEdgeAnimation', edgeId: edgeId2, value: 'fast' })
+    expect(ed.code).toContain('animation-duration:0.6s')
+    expect(ed.code.match(/linkStyle 0 /g)?.length).toBe(1)
+    // none clears the animation keys but leaves the line if other decls remain
+    const edgeId3 = ed.result.flowchart!.edges[0].entityId
+    ed.dispatch({ type: 'setEdgeColor', edgeId: edgeId3, value: '#f00' })
+    ed.dispatch({ type: 'setEdgeAnimation', edgeId: edgeId3, value: 'none' })
+    expect(ed.code).toContain('linkStyle 0 stroke:#f00')
+    expect(ed.code).not.toContain('animation-duration')
+  })
+
+  it('setFlowCurve preserves YAML frontmatter — directive lands after the closing ---', () => {
+    const code = '---\ntitle: My Diagram\n---\nflowchart LR\n  A --> B\n'
+    const ed = new MermaidWysiwygEditor({ code })
+    ed.dispatch({ type: 'setFlowCurve', value: 'linear' })
+    // frontmatter must still be at the very start so mermaid's ^-anchored
+    // frontMatterRegex can extract it; directive sits between frontmatter
+    // and the flowchart header
+    expect(ed.code.startsWith('---\ntitle: My Diagram\n---\n')).toBe(true)
+    expect(ed.code).toContain("%%{init: {'flowchart': {'curve': 'linear'}}}%%")
+    expect(ed.code).toMatch(/---\n%%\{init/)
+    // still parses as one flowchart edge
+    expect(ed.result.flowchart!.edges.length).toBe(1)
+  })
+
+  it('setFlowCurve inserts and replaces the init directive; basis removes it', () => {
+    const ed = new MermaidWysiwygEditor({ code: 'flowchart LR\n  A --> B\n' })
+    ed.dispatch({ type: 'setFlowCurve', value: 'linear' })
+    expect(ed.code).toContain("%%{init: {'flowchart': {'curve': 'linear'}}}%%")
+    ed.dispatch({ type: 'setFlowCurve', value: 'natural' })
+    expect(ed.code).toContain("'curve': 'natural'")
+    expect(ed.code).not.toContain("'curve': 'linear'")
+    // one directive, still parseable
+    expect(ed.result.flowchart!.edges.length).toBe(1)
+    // basis is the mermaid default: clear the directive
+    ed.dispatch({ type: 'setFlowCurve', value: 'basis' })
+    expect(ed.code).not.toContain('%%{init')
+  })
 })
 
 describe('editor state', () => {

@@ -3,11 +3,13 @@ import {
   MESSAGE_OPS,
   PARTICIPANT_TYPES,
   type Diagnostic,
-  type ShapeId,
-  type EdgeLine,
+  type EdgeAnimation,
   type EdgeArrow,
+  type EdgeLine,
+  type FlowCurve,
   type MessageOp,
   type ParticipantType,
+  type ShapeId,
 } from '@visimer/core'
 import {
   correlateClass,
@@ -32,6 +34,101 @@ import { ICONS } from './icons'
 
 /** default swatches offered in the color panels (works on light and dark themes) */
 export const COLOR_PALETTE = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#6366f1', '#d946ef', '#64748b']
+
+// ---------- edge popover previews + read-back helpers ----------
+
+/** SVG preview of the arrow-head combination for the Arrow picker cells. */
+function arrowHeadSvg(line: EdgeLine, start: EdgeArrow, end: EdgeArrow): string {
+  const dash = line === 'dotted' ? 'stroke-dasharray="2 2"' : line === 'invisible' ? 'stroke-dasharray="1 3" opacity="0.5"' : ''
+  const w = line === 'thick' ? '2.5' : '1.5'
+  const x1 = start === 'open' ? 4 : 8
+  const x2 = end === 'open' ? 28 : 24
+  const headStart = arrowHeadMark(start, 'start')
+  const headEnd = arrowHeadMark(end, 'end')
+  return `<svg viewBox="0 0 32 16" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="${x1}" x2="${x2}" y1="8" y2="8" ${dash} />
+    ${headStart}${headEnd}
+  </svg>`
+}
+
+/** Inline mark for one end of an arrow preview. `side` selects orientation. */
+function arrowHeadMark(kind: EdgeArrow, side: 'start' | 'end'): string {
+  if (kind === 'open') return ''
+  if (kind === 'circle') {
+    const cx = side === 'start' ? 4 : 28
+    return `<circle cx="${cx}" cy="8" r="2" fill="currentColor" stroke="none" />`
+  }
+  if (kind === 'cross') {
+    const cx = side === 'start' ? 4 : 28
+    return `<path d="M${cx - 2},6 L${cx + 2},10 M${cx - 2},10 L${cx + 2},6" />`
+  }
+  // filled triangle for `arrow`
+  if (side === 'start') return `<path d="M8,4 L2,8 L8,12 Z" fill="currentColor" stroke="none" />`
+  return `<path d="M24,4 L30,8 L24,12 Z" fill="currentColor" stroke="none" />`
+}
+
+/** SVG preview of a stroke style — no arrow heads, wide enough to see dash. */
+function strokeSvg(line: EdgeLine): string {
+  const dash = line === 'dotted' ? 'stroke-dasharray="3 3"' : line === 'invisible' ? 'stroke-dasharray="1 3" opacity="0.35"' : ''
+  const w = line === 'thick' ? '3' : '1.5'
+  return `<svg viewBox="0 0 32 16" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round">
+    <line x1="4" x2="28" y1="8" y2="8" ${dash} />
+  </svg>`
+}
+
+/** SVG preview of one of the mermaid curve shapes. */
+function curveSvg(curve: FlowCurve): string {
+  const path = curve === 'linear'
+    ? 'M4,14 L14,4 L28,14'
+    : curve === 'natural'
+      ? 'M4,14 Q16,-2 28,14'
+      : 'M4,14 C4,4 28,4 28,14'
+  return `<svg viewBox="0 0 32 20" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+    <path d="${path}" />
+  </svg>`
+}
+
+/** SVG preview for the animation-speed picker; `none` gets a slashed circle. */
+function animSvg(v: EdgeAnimation): string {
+  if (v === 'none') {
+    return `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <circle cx="12" cy="12" r="9" /><line x1="6" x2="18" y1="18" y2="6" />
+    </svg>`
+  }
+  // filled arc suggesting motion; `fast` fills more of the circle
+  const arc = v === 'fast' ? 'M12,3 A9,9 0 0,1 12,21 A9,9 0 0,1 6,5' : 'M12,3 A9,9 0 0,1 20,17'
+  return `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+    <circle cx="12" cy="12" r="9" opacity="0.35" /><path d="${arc}" />
+  </svg>`
+}
+
+/** Read the current diagram-wide curve from the init directive (or 'basis' default). */
+function readFlowCurve(code: string): FlowCurve {
+  const m = /%%\{\s*init[\s\S]*?curve\s*:\s*['"]?(basis|natural|linear)['"]?/i.exec(code)
+  return (m?.[1] as FlowCurve | undefined) ?? 'basis'
+}
+
+/** Read the animation speed for an edge's linkStyle line (or 'none'). */
+function readEdgeAnimation(code: string, edgeOrder: number): EdgeAnimation {
+  const re = new RegExp(`linkStyle\\s+${edgeOrder}\\b[^\\n]*animation-duration\\s*:\\s*([0-9.]+)s`, 'i')
+  const m = re.exec(code)
+  if (!m) return 'none'
+  return Number(m[1]) <= 1 ? 'fast' : 'slow'
+}
+
+/**
+ * Inject the `@keyframes vsmr-flow` rule that the `linkStyle` animation emitter
+ * references. Called once per render so a re-render replacing the SVG picks
+ * the rule back up; idempotent within a single SVG.
+ */
+function injectAnimationKeyframes(svg: SVGElement): void {
+  if (svg.querySelector('style[data-vsmr-flow]')) return
+  const doc = svg.ownerDocument
+  const style = doc.createElementNS('http://www.w3.org/2000/svg', 'style')
+  style.setAttribute('data-vsmr-flow', '')
+  style.textContent = '@keyframes vsmr-flow { to { stroke-dashoffset: -20; } }'
+  svg.insertBefore(style, svg.firstChild)
+}
 
 export interface MermaidLike {
   initialize(config: Record<string, unknown>): void
@@ -95,6 +192,10 @@ const BASE_CSS = `
 .mw-canvas.mw-readonly [data-mw-entity] { cursor: default; }
 .mw-canvas.mw-tool-connect [data-mw-entity^="node:"] { cursor: crosshair; }
 .mw-canvas [data-mw-entity]:hover { filter: drop-shadow(0 0 3px var(--mw-accent, #6366f1)); }
+/* The transparent hit overlay eats the hover on visible edge paths — restore
+ * the drop-shadow on the sibling visible path when the overlay is hovered.
+ * Overlay is placed BEFORE the visible path (insertBefore), so `+` matches. */
+.mw-canvas [data-mw-hit-overlay]:hover + [data-mw-entity] { filter: drop-shadow(0 0 3px var(--mw-accent, #6366f1)); }
 .mw-canvas .mw-selected { filter: drop-shadow(0 0 2px var(--mw-accent, #6366f1)) drop-shadow(0 0 5px var(--mw-accent, #6366f1)) !important; }
 .mw-canvas .mw-ghost-edge { stroke: var(--mw-accent, #6366f1); stroke-width: 2; stroke-dasharray: 6 4; fill: none; pointer-events: none; }
 .mw-canvas .mw-connect-source { filter: drop-shadow(0 0 5px var(--mw-accent, #6366f1)) !important; }
@@ -675,6 +776,7 @@ export class MermaidCanvasView {
       if (this.svg) {
         if (this.panZoomEnabled) this.prepareSvgForPanZoom()
         else this.svg.style.maxWidth = '100%'
+        injectAnimationKeyframes(this.svg)
         this.bindSvg()
       }
       this.editor.setDiagnostics([])
@@ -1698,29 +1800,79 @@ export class MermaidCanvasView {
     if (flowchart && id.startsWith('edge:')) {
       const edge = flowchart.edges.find((e) => e.entityId === id)
       if (!edge) return []
-      const kinds: Array<{ line: EdgeLine; arrowEnd: EdgeArrow; g: string; t: string }> = [
-        { line: 'solid', arrowEnd: 'arrow', g: '—▶', t: 'solid arrow' },
-        { line: 'dotted', arrowEnd: 'arrow', g: '⋯▶', t: 'dotted arrow' },
-        { line: 'thick', arrowEnd: 'arrow', g: '═▶', t: 'thick arrow' },
-        { line: 'solid', arrowEnd: 'open', g: '——', t: 'solid open' },
-        { line: 'dotted', arrowEnd: 'open', g: '⋯⋯', t: 'dotted open' },
-        { line: 'thick', arrowEnd: 'open', g: '══', t: 'thick open' },
-        { line: 'solid', arrowEnd: 'cross', g: '—✕', t: 'solid cross' },
-        { line: 'solid', arrowEnd: 'circle', g: '—●', t: 'solid circle' },
+      // Mermaid can't render single-headed reverse arrows — its edge parser
+      // requires a `>`/`x`/`o` on the end side whenever the start carries a
+      // head, so `<--` silently becomes `<-->`. Only offer combos mermaid
+      // renders faithfully; `reverseEdge` is the way to flip direction.
+      const arrows: Array<{ start: EdgeArrow; end: EdgeArrow; t: string }> = [
+        { start: 'open', end: 'open', t: 'No arrow' },
+        { start: 'open', end: 'arrow', t: 'Arrow' },
+        { start: 'arrow', end: 'arrow', t: 'Double point' },
+        { start: 'open', end: 'cross', t: 'Cross' },
+        { start: 'cross', end: 'cross', t: 'Double cross' },
+        { start: 'open', end: 'circle', t: 'Dot' },
+        { start: 'circle', end: 'circle', t: 'Double dot' },
       ]
+      const strokes: Array<{ line: EdgeLine; t: string }> = [
+        { line: 'solid', t: 'Solid' },
+        { line: 'dotted', t: 'Dotted' },
+        { line: 'thick', t: 'Thick' },
+        { line: 'invisible', t: 'Invisible' },
+      ]
+      const curves: Array<{ v: FlowCurve; t: string; label: string; svg: string }> = [
+        { v: 'basis', t: 'Default (curved)', label: 'Default', svg: curveSvg('basis') },
+        { v: 'natural', t: 'Natural spline', label: 'Natural', svg: curveSvg('natural') },
+        { v: 'linear', t: 'Straight segments', label: 'Linear', svg: curveSvg('linear') },
+      ]
+      const anims: Array<{ v: EdgeAnimation; t: string; label: string; svg: string }> = [
+        { v: 'none', t: 'No animation', label: 'None', svg: animSvg('none') },
+        { v: 'slow', t: 'Slow flow', label: 'Slow', svg: animSvg('slow') },
+        { v: 'fast', t: 'Fast flow', label: 'Fast', svg: animSvg('fast') },
+      ]
+      const currentCurve = readFlowCurve(this.editor.code)
+      const currentAnim = readEdgeAnimation(this.editor.code, edge.order)
       return [
         {
           icon: ICONS.arrowRight,
-          title: 'Edge type',
+          title: 'Arrow',
           panel: {
-            title: 'Edge type',
-            items: kinds.map((k) => ({
-              glyph: k.g,
-              title: k.t,
-              selected: edge.seg.line === k.line && edge.seg.arrowEnd === k.arrowEnd,
-              onClick: () =>
-                this.editor.dispatch({ type: 'setEdgeStyle', edgeId: id, line: k.line, arrowEnd: k.arrowEnd }),
-            })),
+            title: 'Arrow',
+            sections: [
+              {
+                columns: 4,
+                items: arrows.map((a) => ({
+                  svg: arrowHeadSvg(edge.seg.line, a.start, a.end),
+                  title: a.t,
+                  selected: edge.seg.arrowStart === a.start && edge.seg.arrowEnd === a.end,
+                  onClick: () =>
+                    this.editor.dispatch({
+                      type: 'setEdgeStyle',
+                      edgeId: id,
+                      arrowStart: a.start,
+                      arrowEnd: a.end,
+                    }),
+                })),
+              },
+            ],
+          },
+        },
+        {
+          icon: ICONS.equal,
+          title: 'Stroke',
+          panel: {
+            title: 'Stroke',
+            sections: [
+              {
+                columns: 4,
+                items: strokes.map((s) => ({
+                  svg: strokeSvg(s.line),
+                  title: s.t,
+                  label: s.t,
+                  selected: edge.seg.line === s.line,
+                  onClick: () => this.editor.dispatch({ type: 'setEdgeStyle', edgeId: id, line: s.line }),
+                })),
+              },
+            ],
           },
         },
         {
@@ -1729,6 +1881,44 @@ export class MermaidCanvasView {
           panel: {
             title: 'Edge color',
             sections: [this.colorSection('Stroke', (value) => this.editor.dispatch({ type: 'setEdgeColor', edgeId: id, value }))],
+          },
+        },
+        {
+          icon: ICONS.circlePlay,
+          title: 'Animate edge',
+          panel: {
+            title: 'Animate edge',
+            sections: [
+              {
+                columns: 3,
+                items: anims.map((a) => ({
+                  svg: a.svg,
+                  title: a.t,
+                  label: a.label,
+                  selected: currentAnim === a.v,
+                  onClick: () => this.editor.dispatch({ type: 'setEdgeAnimation', edgeId: id, value: a.v }),
+                })),
+              },
+            ],
+          },
+        },
+        {
+          icon: ICONS.spline,
+          title: 'Edge curve (diagram-wide)',
+          panel: {
+            title: 'Edge curve',
+            sections: [
+              {
+                columns: 3,
+                items: curves.map((c) => ({
+                  svg: c.svg,
+                  title: c.t,
+                  label: c.label,
+                  selected: currentCurve === c.v,
+                  onClick: () => this.editor.dispatch({ type: 'setFlowCurve', value: c.v }),
+                })),
+              },
+            ],
           },
         },
         {

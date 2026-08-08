@@ -2,19 +2,24 @@ import type { LineInfo, TextEdit } from '../types'
 import type { FlowGraph, FlowEdge, FlowNode } from './graph'
 import { SHAPE_DELIMS, type ChainStmt, type EdgeArrow, type EdgeLine, type NodeRef, type ShapeId } from './parse'
 
+export type EdgeAnimation = 'none' | 'slow' | 'fast'
+export type FlowCurve = 'basis' | 'natural' | 'linear'
+
 export type FlowchartOp =
   | { type: 'addNode'; shape?: ShapeId; label?: string; id?: string }
   | { type: 'connect'; source: string; target: string; line?: EdgeLine; arrowEnd?: EdgeArrow; label?: string }
   | { type: 'renameNode'; id: string; label: string }
   | { type: 'setNodeShape'; id: string; shape: ShapeId }
   | { type: 'setEdgeLabel'; edgeId: string; label: string }
-  | { type: 'setEdgeStyle'; edgeId: string; line?: EdgeLine; arrowEnd?: EdgeArrow }
+  | { type: 'setEdgeStyle'; edgeId: string; line?: EdgeLine; arrowEnd?: EdgeArrow; arrowStart?: EdgeArrow }
   | { type: 'setDirection'; direction: string }
   | { type: 'deleteNode'; id: string }
   | { type: 'deleteEdge'; edgeId: string }
   | { type: 'renameSubgraph'; id: string; title: string }
   | { type: 'setNodeColor'; id: string; prop: 'fill' | 'stroke' | 'color'; value: string | null }
   | { type: 'setEdgeColor'; edgeId: string; value: string | null }
+  | { type: 'setEdgeAnimation'; edgeId: string; value: EdgeAnimation }
+  | { type: 'setFlowCurve'; value: FlowCurve }
   | { type: 'reverseEdge'; edgeId: string }
   | { type: 'duplicateNode'; id: string }
 
@@ -40,17 +45,26 @@ function printLabel(label: string, forceQuote: boolean): string {
   return clean
 }
 
-function edgeOpString(line: EdgeLine, arrowEnd: EdgeArrow): string {
+function edgeOpString(line: EdgeLine, arrowEnd: EdgeArrow, arrowStart: EdgeArrow = 'open'): string {
   const end = arrowEnd === 'arrow' ? '>' : arrowEnd === 'cross' ? 'x' : arrowEnd === 'circle' ? 'o' : ''
+  // Mermaid uses `<` for the arrow head on the source side; `x`/`o` are the
+  // same characters as their end-side counterparts. `open` means no head.
+  const start = arrowStart === 'arrow' ? '<' : arrowStart === 'cross' ? 'x' : arrowStart === 'circle' ? 'o' : ''
   switch (line) {
     case 'thick':
-      return end ? `==${end}` : '==='
+      // `x==` doesn't tokenize as an edge — the "solid arrow at end" path
+      // requires a `>`/`x`/`o` on the end when the start carries a head, so
+      // callers should only set `arrowStart` alongside a non-`open` `arrowEnd`
+      if (start && !end) return `${start}==>`
+      return end ? `${start}==${end}` : '==='
     case 'dotted':
-      return end ? `-.-${end}` : '-.-'
+      if (start && !end) return `${start}-.->`
+      return end ? `${start}-.-${end}` : '-.-'
     case 'invisible':
       return '~~~'
     default:
-      return end ? `--${end}` : '---'
+      if (start && !end) return `${start}-->`
+      return end ? `${start}--${end}` : '---'
   }
 }
 
@@ -229,6 +243,98 @@ function nodeOf(graph: FlowGraph, id: string): FlowNode | null {
   return graph.nodeById.get(id) ?? null
 }
 
+/**
+ * Merge-patch the `linkStyle N` declarations for a given edge — parses the
+ * existing k:v pairs, applies `patch` (a null value deletes the key), and
+ * rewrites or inserts the line. Prevents callers from stomping unrelated
+ * declarations (e.g. setting animation shouldn't drop the stroke color).
+ */
+function patchEdgeLinkStyle(
+  ctx: FlowOpContext,
+  graph: FlowGraph,
+  edgeId: string,
+  patch: Record<string, string | null>,
+): OpResult | null {
+  const edge = findEdge(graph, edgeId)
+  if (!edge) return null
+  let linkLine = -1
+  for (const [lineIndex, stmt] of graph.statements) {
+    if (stmt.kind !== 'linkStyle') continue
+    const m = /^linkStyle\s+(\d+)\b/.exec(ctx.lines[lineIndex].text.trim())
+    if (m && Number(m[1]) === edge.order) {
+      linkLine = lineIndex
+      break
+    }
+  }
+  const props = new Map<string, string>()
+  if (linkLine >= 0) {
+    const rest = ctx.lines[linkLine].text.trim().replace(/^linkStyle\s+\d+\s*/, '')
+    for (const pair of rest.split(',')) {
+      const i = pair.indexOf(':')
+      if (i > 0) props.set(pair.slice(0, i).trim(), pair.slice(i + 1).trim())
+    }
+  }
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === null) props.delete(key)
+    else props.set(key, value)
+  }
+  if (props.size === 0) {
+    if (linkLine === -1) return { edits: [] }
+    return { edits: [deleteLineEdit(ctx, linkLine)] }
+  }
+  const indent = linkLine >= 0 ? ctx.lines[linkLine].indent : bodyIndent(ctx)
+  const text = `${indent}linkStyle ${edge.order} ${[...props].map(([k, v]) => `${k}:${v}`).join(',')}`
+  if (linkLine >= 0) return { edits: [replaceLineEdit(ctx, linkLine, [text])] }
+  return { edits: [insertLinesAfter(ctx, graph.lastContentLine, [text])] }
+}
+
+/**
+ * Absolute offset to insert a directive at — after any YAML frontmatter
+ * block, at document start otherwise. `LineInfo.end` is BEFORE the newline,
+ * so `+ 1` lands us at the start of the following line.
+ */
+function frontmatterInsertOffset(ctx: FlowOpContext): number {
+  let lastFrontmatter = -1
+  for (const line of ctx.lines) {
+    if (line.kind === 'frontmatter') lastFrontmatter = line.index
+    else if (lastFrontmatter >= 0) break
+  }
+  if (lastFrontmatter < 0) return 0
+  return ctx.lines[lastFrontmatter].end + 1
+}
+
+/**
+ * Patch the diagram-level `%%{init: {flowchart: {curve: X}}}%%` directive.
+ * Text-level: detects an existing init line via regex and replaces just the
+ * curve declaration, otherwise inserts a fresh directive at the very top.
+ * `basis` is mermaid's default; setting it removes any prior directive.
+ */
+function patchFlowInitCurve(ctx: FlowOpContext, value: FlowCurve): OpResult {
+  const initRe = /^\s*%%\{\s*init\s*:\s*(\{[\s\S]*?\})\s*\}%%\s*$/m
+  const m = initRe.exec(ctx.code)
+  const setDirective = `%%{init: {'flowchart': {'curve': '${value}'}}}%%`
+  if (!m) {
+    if (value === 'basis') return { edits: [] }
+    // The init directive must precede the flowchart header — but ONLY under
+    // any YAML frontmatter. Mermaid's `frontMatterRegex` is `^`-anchored with
+    // no /m flag, so a directive above `---\ntitle: X\n---\n` prevents front-
+    // matter extraction and the header lines reach the flowchart parser as
+    // syntax errors. `classifyLines` treats frontmatter as a first-class kind,
+    // so honoring its span is the right insertion point.
+    const insertAt = frontmatterInsertOffset(ctx)
+    return { edits: [{ start: insertAt, end: insertAt, text: `${setDirective}\n` }] }
+  }
+  // Rewrite the whole init line to keep this simple — the alternative is
+  // parsing/merging JSON-ish blobs, which mermaid's tolerant syntax makes
+  // fragile. Nested settings besides `flowchart.curve` are rare in visimer-
+  // generated code; when a user hand-wrote a rich directive, they can
+  // re-declare it after.
+  const start = m.index + m[0].search(/%%\{/)
+  const end = m.index + m[0].length
+  const replacement = value === 'basis' ? '' : setDirective
+  return { edits: [{ start, end, text: replacement }] }
+}
+
 // ---------- compiler ----------
 
 export function compileFlowchartOp(ctx: FlowOpContext, op: FlowchartOp): OpResult | null {
@@ -316,7 +422,7 @@ export function compileFlowchartOp(ctx: FlowOpContext, op: FlowchartOp): OpResul
       if (edge.seg.labelSpan) {
         if (label === '') {
           // remove the label entirely by rewriting the operator
-          const opStr = edgeOpString(edge.seg.line, edge.seg.arrowEnd)
+          const opStr = edgeOpString(edge.seg.line, edge.seg.arrowEnd, edge.seg.arrowStart)
           return { edits: [{ start: edge.seg.span.start, end: edge.seg.span.end, text: opStr }] }
         }
         return { edits: [{ start: edge.seg.labelSpan.start, end: edge.seg.labelSpan.end, text: label }] }
@@ -328,9 +434,18 @@ export function compileFlowchartOp(ctx: FlowOpContext, op: FlowchartOp): OpResul
     case 'setEdgeStyle': {
       const edge = findEdge(graph, op.edgeId)
       if (!edge) return null
-      const line = op.line ?? edge.seg.line
+      let line = op.line ?? edge.seg.line
       const arrowEnd = op.arrowEnd ?? edge.seg.arrowEnd
-      const opStr = edgeOpString(line, arrowEnd)
+      const arrowStart = op.arrowStart ?? edge.seg.arrowStart
+      // Invisible links (`~~~`) render as a layout hint with no visible edge —
+      // mermaid ignores head markers on them, and `edgeOpString` therefore
+      // returns `'~~~'` unconditionally. If a caller sets a head on what's
+      // currently invisible, promote the line to `solid` so the head can
+      // actually render; otherwise the dispatch would silently no-op.
+      if (line === 'invisible' && (arrowEnd !== 'open' || arrowStart !== 'open')) {
+        line = 'solid'
+      }
+      const opStr = edgeOpString(line, arrowEnd, arrowStart)
       const label = edge.seg.label !== null ? `|${edge.seg.label.replace(/\|/g, '')}|` : ''
       return { edits: [{ start: edge.seg.span.start, end: edge.seg.span.end, text: `${opStr}${label}` }] }
     }
@@ -463,26 +578,41 @@ export function compileFlowchartOp(ctx: FlowOpContext, op: FlowchartOp): OpResul
     }
 
     case 'setEdgeColor': {
-      const edge = findEdge(graph, op.edgeId)
-      if (!edge) return null
-      // linkStyle addresses edges by render index (== document order)
-      let linkLine = -1
-      for (const [lineIndex, stmt] of graph.statements) {
-        if (stmt.kind !== 'linkStyle') continue
-        const m = /^linkStyle\s+(\d+)\b/.exec(ctx.lines[lineIndex].text.trim())
-        if (m && Number(m[1]) === edge.order) {
-          linkLine = lineIndex
-          break
-        }
+      return patchEdgeLinkStyle(ctx, graph, op.edgeId, {
+        stroke: op.value,
+        'stroke-width': op.value === null ? null : '2px',
+      })
+    }
+
+    case 'setEdgeAnimation': {
+      // `none` clears the animation-* + stroke-dasharray keys but leaves any
+      // other declarations (color, width) intact — hence the null-per-key
+      // rather than deleting the whole linkStyle line.
+      if (op.value === 'none') {
+        return patchEdgeLinkStyle(ctx, graph, op.edgeId, {
+          'stroke-dasharray': null,
+          'animation-name': null,
+          'animation-duration': null,
+          'animation-timing-function': null,
+          'animation-iteration-count': null,
+        })
       }
-      if (op.value === null) {
-        if (linkLine === -1) return { edits: [] }
-        return { edits: [deleteLineEdit(ctx, linkLine)] }
-      }
-      const indent = linkLine >= 0 ? ctx.lines[linkLine].indent : bodyIndent(ctx)
-      const text = `${indent}linkStyle ${edge.order} stroke:${op.value},stroke-width:2px`
-      if (linkLine >= 0) return { edits: [replaceLineEdit(ctx, linkLine, [text])] }
-      return { edits: [insertLinesAfter(ctx, graph.lastContentLine, [text])] }
+      const duration = op.value === 'slow' ? '2s' : '0.6s'
+      // Long-hand keys because mermaid's `linkStyle` parser splits declarations
+      // on `,` — the `animation` shorthand's own comma-separated form would be
+      // shredded across pseudo-declarations. `vsmr-flow` is injected as a
+      // @keyframes rule once per SVG by the renderer host.
+      return patchEdgeLinkStyle(ctx, graph, op.edgeId, {
+        'stroke-dasharray': '8',
+        'animation-name': 'vsmr-flow',
+        'animation-duration': duration,
+        'animation-timing-function': 'linear',
+        'animation-iteration-count': 'infinite',
+      })
+    }
+
+    case 'setFlowCurve': {
+      return patchFlowInitCurve(ctx, op.value)
     }
 
     case 'renameSubgraph': {
