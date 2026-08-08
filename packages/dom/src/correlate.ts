@@ -22,6 +22,38 @@ function esc(s: string): string {
 }
 
 /**
+ * Widen a mermaid edge's click surface — clones the visible `<path>` as a
+ * transparent 14px-stroke sibling that carries the same `data-mw-entity`, so
+ * hit-testing walks up to it from within a ~7px radius on either side of the
+ * visible line. `pointer-events: stroke` keeps the interior fill inert; the
+ * overlay is painted BEFORE the visible path so the arrow head, cross, or
+ * dot still visually wins overlap, and it inherits the same paint transform.
+ */
+function addEdgeHitOverlay(path: SVGElement, entityId: string): void {
+  const doc = path.ownerDocument
+  if (!doc || path.hasAttribute('data-mw-hit-overlay')) return
+  const parent = path.parentNode
+  if (!parent) return
+  // Skip if a prior render already added an overlay for this edge — mermaid
+  // reuses group elements across re-renders, and dagre's dedupe pass will
+  // otherwise stack overlays until the popover picker starts glitching.
+  const priorOverlay = (parent as ParentNode).querySelector(`[data-mw-hit-overlay="${CSS.escape(entityId)}"]`)
+  if (priorOverlay) return
+  const overlay = doc.createElementNS('http://www.w3.org/2000/svg', 'path')
+  const d = path.getAttribute('d') ?? ''
+  overlay.setAttribute('d', d)
+  overlay.setAttribute('fill', 'none')
+  overlay.setAttribute('stroke', 'transparent')
+  overlay.setAttribute('stroke-width', '14')
+  overlay.setAttribute('stroke-linecap', 'round')
+  overlay.setAttribute('data-mw-entity', entityId)
+  overlay.setAttribute('data-mw-hit-overlay', entityId)
+  overlay.style.pointerEvents = 'stroke'
+  overlay.style.cursor = 'pointer'
+  parent.insertBefore(overlay, path)
+}
+
+/**
  * Correlate mermaid's rendered flowchart SVG with the semantic graph.
  * Strategy: id conventions first (`flowchart-<id>-N`, `L_<src>_<tgt>_N`),
  * then order matching as a fallback. Anything unmatched degrades to view-only.
@@ -65,6 +97,7 @@ export function correlateFlowchart(svg: SVGSVGElement, graph: FlowGraph): Correl
       edges.set(edge.entityId, el)
       claimedEdges.add(el)
       el.setAttribute('data-mw-entity', edge.entityId)
+      addEdgeHitOverlay(el, edge.entityId)
     }
   }
   const unmatchedEdges = graph.edges.filter((e) => !edges.has(e.entityId))
@@ -73,6 +106,7 @@ export function correlateFlowchart(svg: SVGSVGElement, graph: FlowGraph): Correl
     unmatchedEdges.forEach((e, i) => {
       edges.set(e.entityId, unclaimedEdgeEls[i])
       unclaimedEdgeEls[i].setAttribute('data-mw-entity', e.entityId)
+      addEdgeHitOverlay(unclaimedEdgeEls[i], e.entityId)
     })
   } else {
     for (const e of unmatchedEdges) failed.push(e.entityId)
@@ -161,6 +195,7 @@ export function correlateState(svg: SVGSVGElement, graph: StateGraph): Correlati
     graph.transitions.forEach((t, i) => {
       edges.set(t.entityId, edgeEls[i])
       edgeEls[i].setAttribute('data-mw-entity', t.entityId)
+      addEdgeHitOverlay(edgeEls[i], t.entityId)
     })
   } else {
     for (const t of graph.transitions) failed.push(t.entityId)
@@ -237,6 +272,7 @@ export function correlateClass(svg: SVGSVGElement, graph: ClassGraph): Correlati
     graph.relations.forEach((r, i) => {
       edges.set(r.entityId, edgeEls[i])
       edgeEls[i].setAttribute('data-mw-entity', r.entityId)
+      addEdgeHitOverlay(edgeEls[i], r.entityId)
     })
   } else {
     for (const r of graph.relations) failed.push(r.entityId)
@@ -305,6 +341,7 @@ export function correlateEr(svg: SVGSVGElement, graph: ErGraph): Correlation {
     graph.relations.forEach((r, i) => {
       edges.set(r.entityId, edgeEls[i])
       edgeEls[i].setAttribute('data-mw-entity', r.entityId)
+      addEdgeHitOverlay(edgeEls[i], r.entityId)
     })
   } else {
     for (const r of graph.relations) failed.push(r.entityId)

@@ -51,4 +51,9 @@ export const ICONS = {
   ),
   ellipsis: icon('<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>'),
   chevronDown: icon('<path d="m6 9 6 6 6-6"/>'),
+  equal: icon('<line x1="5" x2="19" y1="9" y2="9"/><line x1="5" x2="19" y1="15" y2="15"/>'),
+  spline: icon(
+    '<path d="M4 20c6 0 5-8 12-8 0 0 4 0 4 0"/><circle cx="4" cy="20" r="2"/><circle cx="20" cy="12" r="2"/>',
+  ),
+  circlePlay: icon('<circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/>'),
 }

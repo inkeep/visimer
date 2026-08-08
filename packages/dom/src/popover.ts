@@ -18,9 +18,13 @@ export interface PopoverAction {
 export interface PopoverPanelItem {
   /** text glyph for the cell */
   glyph?: string
-  /** color swatch cell (takes precedence over glyph) */
+  /** inline svg markup for the cell (takes precedence over glyph) */
+  svg?: string
+  /** color swatch cell (takes precedence over glyph and svg) */
   swatch?: string
   title: string
+  /** shown under the cell as a text label (e.g. "Slow" / "Fast" / "Default") */
+  label?: string
   selected?: boolean
   onClick: () => void
 }
@@ -132,7 +136,8 @@ export class Popover {
       for (const item of section.items) {
         const b = document.createElement('button')
         b.type = 'button'
-        b.className = 'mw-popover-cell' + (item.selected ? ' selected' : '') + (item.swatch ? ' swatch' : '')
+        const kindClass = item.swatch ? ' swatch' : item.svg ? ' svg' : ''
+        b.className = 'mw-popover-cell' + (item.selected ? ' selected' : '') + kindClass + (item.label ? ' labeled' : '')
         b.title = item.title
         if (item.swatch) {
           const dot = document.createElement('span')
@@ -140,8 +145,22 @@ export class Popover {
           if (item.swatch === 'none') dot.classList.add('none')
           else dot.style.background = item.swatch
           b.appendChild(dot)
+        } else if (item.svg) {
+          const g = document.createElement('span')
+          g.className = 'mw-cell-svg'
+          g.innerHTML = item.svg
+          b.appendChild(g)
         } else {
-          b.textContent = item.glyph ?? ''
+          const g = document.createElement('span')
+          g.className = 'mw-cell-glyph'
+          g.textContent = item.glyph ?? ''
+          b.appendChild(g)
+        }
+        if (item.label) {
+          const lbl = document.createElement('span')
+          lbl.className = 'mw-cell-label'
+          lbl.textContent = item.label
+          b.appendChild(lbl)
         }
         b.addEventListener('click', (e) => {
           e.stopPropagation()
@@ -194,12 +213,12 @@ export const POPOVER_CSS = `
   position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
   background: var(--mw-chrome-bg, #0a0a0a); border: 1px solid var(--mw-chrome-border, #333);
   border-radius: 8px; box-shadow: 0 0 0 1px rgba(0,0,0,0.4), 0 8px 30px rgba(0,0,0,0.45);
-  padding: 6px; min-width: 140px;
+  padding: 4px; min-width: 0;
 }
 .mw-popover-panel.below { bottom: auto; top: calc(100% + 6px); }
 .mw-popover-panel-title {
-  font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.07em;
-  color: var(--mw-chrome-dim, #666); padding: 3px 5px 7px; white-space: nowrap;
+  font-size: 9.5px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.07em;
+  color: var(--mw-chrome-dim, #666); padding: 2px 4px 4px; white-space: nowrap;
 }
 .mw-popover-section-title {
   font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em;
@@ -217,6 +236,12 @@ export const POPOVER_CSS = `
   background: color-mix(in srgb, var(--mw-accent, #0070f3) 12%, transparent);
 }
 .mw-popover-cell.swatch { padding: 5px; display: flex; align-items: center; justify-content: center; }
+.mw-popover-cell.svg { padding: 4px 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+.mw-popover-cell.svg .mw-cell-svg { display: inline-flex; }
+.mw-popover-cell.svg svg { width: 26px; height: 12px; display: block; }
+.mw-popover-cell.labeled { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 6px; }
+.mw-popover-cell.labeled svg { width: 18px; height: 18px; }
+.mw-popover-cell .mw-cell-label { font-size: 9.5px; color: inherit; opacity: 0.8; }
 .mw-swatch-dot { width: 15px; height: 15px; border-radius: 99px; display: block; border: 1px solid rgba(255,255,255,0.18); }
 .mw-swatch-dot.none {
   background: linear-gradient(to top left, transparent 45%, #ff4444 46%, #ff4444 54%, transparent 55%);
