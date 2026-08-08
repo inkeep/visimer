@@ -1,5 +1,12 @@
 # @visimer/monaco
 
+## 1.1.0
+
+### Patch Changes
+
+- Updated dependencies [784f461]
+  - @visimer/core@1.1.0
+
 ## 1.0.2
 
 ### Patch Changes
