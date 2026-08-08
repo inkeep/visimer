@@ -1,6 +1,6 @@
 {
   "name": "@visimer/monaco",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "Monaco binding for visimer: two-way code sync, entity highlight decorations, shared undo authority. No monaco-editor dependency; bring your own instance.",
   "type": "module",
   "main": "./src/index.ts",
