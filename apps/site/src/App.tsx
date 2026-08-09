@@ -17,6 +17,60 @@ const REPO = 'inkeep/visimer'
 const REPO_URL = `https://github.com/${REPO}`
 const INSTALL_CMD = 'npm i @visimer/react'
 
+/**
+ * The headline, as Mermaid. The verb rides the connector, which is where mermaid
+ * puts verbs, so the whole thing reads as one sentence.
+ *
+ * Direction is picked once at mount rather than on every resize: a phone fits the
+ * left-to-right layout by width, which shrinks the headline to caption size, but
+ * re-picking on resize would overwrite whatever the visitor had typed into it.
+ */
+const HERO_SOURCE_LR = `flowchart LR
+  A[WYSIWYG editor] -->|renders| B[native mermaid]`
+
+const HERO_SOURCE_TD = `flowchart TD
+  A[WYSIWYG editor] -->|renders| B[native mermaid]`
+
+/**
+ * Inclusive at 760 to match `@media (max-width: 760px)` in site.css, which sizes
+ * the band for this layout. A strict `<` disagrees with the media query at
+ * exactly 760px: the band goes tall for a stacked diagram while the source is
+ * still left-to-right.
+ */
+const HERO_STACK_MAX_WIDTH = 760
+
+function initialHeroSource(): string {
+  if (typeof window === 'undefined') return HERO_SOURCE_LR
+  return window.innerWidth <= HERO_STACK_MAX_WIDTH ? HERO_SOURCE_TD : HERO_SOURCE_LR
+}
+
+/**
+ * Mermaid lays the headline out at display size, so this config carries the type
+ * scale rather than CSS scaling a small render up. Node padding is deliberately
+ * tight: the masthead fits to width, so every unit of padding is paid for in
+ * headline size.
+ */
+const heroConfig = {
+  theme: 'base',
+  flowchart: { padding: 11, nodeSpacing: 44, rankSpacing: 44, useMaxWidth: false },
+  themeVariables: {
+    fontFamily: "'Inter', sans-serif",
+    primaryColor: '#EAF3F0',
+    primaryBorderColor: '#0E7C6B',
+    primaryTextColor: '#1C1A17',
+    lineColor: '#0E7C6B',
+    secondaryColor: '#F5E9C9',
+    secondaryBorderColor: '#C9A227',
+    tertiaryColor: '#FBF9F4',
+    tertiaryBorderColor: '#E6E0D4',
+    mainBkg: '#EAF3F0',
+    nodeBorder: '#0E7C6B',
+    textColor: '#1C1A17',
+    // No edgeLabelBackground: mermaid ignores it for flowchart edge labels and
+    // backs them with the secondary tint instead, so site.css sets it.
+  },
+}
+
 
 const FEATURES: Array<{ mark: string; title: string; body: string }> = [
   {
@@ -156,6 +210,14 @@ export default function App() {
   const [type, setType] = useState('flowchart')
   const [skin, setSkin] = useState<'light' | 'dark'>('light')
   const { editor } = useMermaidEditor(PRESETS.flowchart)
+
+  // The headline runs on its own editor so editing it never disturbs the
+  // playground below, and vice versa.
+  const [heroInitial] = useState(initialHeroSource)
+  const { editor: heroEditor } = useMermaidEditor(heroInitial)
+  const [heroSource, setHeroSource] = useState(heroInitial)
+  useEffect(() => heroEditor.on('change', ({ code }) => setHeroSource(code.trim())), [heroEditor])
+
   useCanvasControlTracking()
 
   // Expanding hands off to the dedicated /playground page, carrying the
@@ -409,8 +471,15 @@ export default function App() {
         </div>
       </header>
 
-      <main id="top">
-        <section style={{ maxWidth: 1000, margin: '0 auto', padding: '82px 26px 30px', textAlign: 'center' }}>
+      {/* The hero canvas is 100vw, which counts the scrollbar on platforms that
+          reserve space for one, so it would sit a few pixels wider than the page
+          and add a horizontal scrollbar. `clip` trims that without creating a
+          scroll container, so the sticky header above is unaffected. */}
+      <main id="top" style={{ overflowX: 'clip' }}>
+        {/* Wider than the old 1000px hero: the headline is now fit to the width of
+            this container, so a narrow one renders it well below the 76px the
+            text h1 used to carry. 1180 matches the demo section below it. */}
+        <section style={{ maxWidth: 1180, margin: '0 auto', padding: '74px 26px 34px', textAlign: 'center' }}>
           <div
             ref={badgeRef}
             style={{
@@ -429,23 +498,85 @@ export default function App() {
             <span style={{ width: 7, height: 7, borderRadius: 99, background: '#0E7C6B', display: 'inline-block' }} />
             Open source · {licenseLabel} · React &amp; vanilla
           </div>
-          <h1
+
+          {/* The canvas is not a card in the hero, it IS the hero: full-bleed to the
+              window, on the page's own background, with no border, fill or radius of
+              its own. Only the diagram is drawn, so the band reads as open page.
+
+              It stays in flow rather than sitting behind the whole section. Mermaid
+              centres the diagram in its canvas, so a canvas spanning the section
+              would centre on the section's midpoint, which on a phone lands on top
+              of the copy. Owning its own band keeps that under control. */}
+          {/* The heading is the text; the canvas is its rendering. Keeping them as
+              separate elements matters: with the canvas inside the h1, the heading
+              exposed the sentence once as its own text and then again, out of
+              order, from the diagram's own labels, and its textContent picked up
+              the whole stylesheet mermaid injects. The canvas is hidden from
+              assistive tech because it duplicates the heading and its editing is
+              pointer-only, so exposing it would add confusion without adding a
+              capability.
+
+              This text deliberately does not track edits to the diagram. It is the
+              page's heading, and rewriting it under an assistive-tech user as
+              somebody types would churn the accessibility tree and the document
+              outline for a change only the editing visitor made, to their own
+              local copy. The live source is echoed in the hint line below instead. */}
+          <h1 className="sr-only">WYSIWYG editor renders native mermaid</h1>
+          <div
+            className="hero-masthead"
+            aria-hidden
             style={{
-              fontFamily: "'Inter', sans-serif",
-              fontWeight: 700,
-              fontSize: 'clamp(42px, 6.6vw, 76px)',
-              lineHeight: 1.04,
-              letterSpacing: '-0.035em',
+              position: 'relative',
+              left: '50%',
+              width: '100vw',
+              transform: 'translateX(-50%)',
+              height: 'clamp(210px, 24vw, 300px)',
               margin: '26px 0 0',
-              textWrap: 'balance',
             }}
           >
-            Edit Mermaid diagrams <em style={{ fontStyle: 'normal', color: '#0E7C6B' }}>visually.</em>
-          </h1>
+            <MermaidCanvas
+              editor={heroEditor}
+              mermaid={mermaid}
+              mermaidConfig={heroConfig}
+              accentColor="#0E7C6B"
+              className="site-demo-canvas"
+              // The binding defaults the host to min-height 240, which fights the
+              // absolute inset positioning: between 761 and 999px the band is
+              // shorter than that, so the canvas outgrows the box and the diagram
+              // drifts off centre into the hint below.
+              style={{ backgroundColor: 'transparent', minHeight: 0 }}
+              // The canvas host sets tabIndex 0, which would leave a tab stop
+              // inside this aria-hidden subtree that announces nothing and does
+              // nothing, since editing here is pointer-only.
+              onReady={(view) => {
+                view.container.tabIndex = -1
+              }}
+            />
+          </div>
+          <div
+            className="hero-hint"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 10,
+              flexWrap: 'wrap',
+              margin: '14px 0 0',
+              fontSize: 13,
+              color: '#8A857A',
+            }}
+          >
+            <span style={{ color: '#0E7C6B', fontWeight: 600 }}>That headline is a live Mermaid diagram.</span>
+            <span>Double-click a word to rewrite it.</span>
+            {/* the statement line only: "flowchart LR" is noise in a one-line hint */}
+            <code style={{ fontFamily: mono, fontSize: 12.5, color: '#6B6559' }}>
+              {heroSource.split('\n').slice(1).join(' ').replace(/\s+/g, ' ').trim()}
+            </code>
+          </div>
           <p
             style={{
               maxWidth: 620,
-              margin: '22px auto 0',
+              margin: '20px auto 0',
               fontSize: 18.5,
               lineHeight: 1.55,
               color: '#544F47',
