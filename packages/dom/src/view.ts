@@ -749,6 +749,11 @@ export class MermaidCanvasView {
     const seq = ++this.renderSeq
     const id = `mw-render-${++renderIdCounter}`
     try {
+      // mermaid.initialize writes a module-global config, so with more than one
+      // canvas on a page the last one to mount owns it and every other canvas
+      // renders with the wrong theme and layout. Re-assert ours here rather than
+      // trusting whatever was initialized in the constructor.
+      this.mermaid.initialize(this.mermaidConfig)
       const { svg } = await this.mermaid.render(id, code)
       if (seq !== this.renderSeq) return // stale
       // an in-place edit may have kept typing since the live commit this render

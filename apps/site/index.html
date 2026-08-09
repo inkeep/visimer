@@ -74,7 +74,23 @@
     </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!--
+        Replaced by the app the moment it mounts. It is here because this is a
+        client-rendered SPA: without it the served document body is literally an
+        empty div, so anything that does not execute JavaScript sees no headline
+        at all, and the first paint is blank until the bundle has run.
+
+        Since the visible headline is drawn by mermaid at runtime, this is also
+        what shows if that render ever fails while the rest of the page works.
+
+        Keep this copy in sync with the hero in App.tsx.
+      -->
+      <div class="boot">
+        <h1 class="boot-title">WYSIWYG editor renders native mermaid</h1>
+        <p class="boot-sub">Click a node to edit it. Perfect for polishing AI-generated diagrams.</p>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -36,6 +36,162 @@ textarea {
   }
 }
 
+/* ---- Hero masthead -------------------------------------------------------
+   The h1 is a live Mermaid flowchart rather than text. It renders through the
+   published canvas, so it is editable in place: double-click a word and the
+   headline rewrites itself.
+
+   Three things this needs that an ordinary canvas does not:
+
+   1. Display scale. Mermaid ignores the fontSize theme variable for HTML
+      labels (they render at 16px) and the canvas fit caps at 2x, so neither can
+      drive headline size. The SVG's own viewBox does it: width and height at
+      100% with the default preserveAspectRatio scales glyphs, rule weights and
+      hit regions together, with no CSS transform to keep in sync.
+   2. Label slack. Mermaid measures labels in a detached node at its own weight,
+      so this heavier face needs slightly more width than the box it was given.
+      Node padding in the mermaid config supplies it; the overflow rules here
+      only stop a glyph being sliced if a future string outgrows that padding.
+   3. Room for the popover. The edit toolbar is a child of the canvas, so a
+      clipped hero would cut it in half on the first double-click.
+
+   Every rule is scoped to `.mw-svg-host > svg`, the diagram itself. A bare
+   `.mw-canvas svg` also matches the icons inside that popover, which would pin
+   each one to inset 0 and stack them into an unreadable pile. */
+/* The host has to be pinned to the card as well as the svg. Left to size itself
+   it takes the diagram's natural height, and since the svg is positioned against
+   the host rather than the card, the diagram then paints straight out of the
+   hero — most visibly on phones, where the stacked layout is tallest. */
+.hero-masthead .mw-svg-host {
+  position: absolute;
+  inset: 0;
+}
+.hero-masthead .mw-svg-host > svg {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  transform: none !important;
+}
+.hero-masthead .mw-svg-host > svg .nodeLabel,
+.hero-masthead .mw-svg-host > svg .nodeLabel p {
+  font-family: 'Inter', sans-serif !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.035em !important;
+  color: #1c1a17 !important;
+  fill: #1c1a17 !important;
+}
+.hero-masthead .mw-svg-host > svg foreignObject {
+  overflow: visible !important;
+}
+.hero-masthead .mw-svg-host > svg .nodeLabel,
+.hero-masthead .mw-svg-host > svg .nodeLabel p,
+.hero-masthead .mw-svg-host > svg .nodeLabel div {
+  overflow: visible !important;
+  white-space: nowrap !important;
+  max-width: none !important;
+}
+.hero-masthead .mw-svg-host > svg .edgePath path,
+.hero-masthead .mw-svg-host > svg .flowchart-link {
+  stroke: #0e7c6b !important;
+  stroke-width: 2px !important;
+}
+.hero-masthead .mw-svg-host > svg marker path,
+.hero-masthead .mw-svg-host > svg .marker {
+  fill: #0e7c6b !important;
+  stroke: #0e7c6b !important;
+}
+/* The edge label needs an opaque backing so the connector does not strike
+   through the word, but mermaid takes that colour from the theme's secondary
+   (the gold tint) and ignores edgeLabelBackground here, which reads as a
+   highlighter chip. It matches the page instead, since the hero canvas sits
+   directly on the site background with no card of its own. */
+.hero-masthead .mw-svg-host > svg .edgeLabel,
+.hero-masthead .mw-svg-host > svg .edgeLabel span,
+.hero-masthead .mw-svg-host > svg .edgeLabel p {
+  background: #f7f4ed !important;
+  background-color: #f7f4ed !important;
+  color: #544f47 !important;
+  fill: #544f47 !important;
+}
+.hero-masthead .mw-svg-host > svg .edgeLabel rect {
+  fill: #f7f4ed !important;
+}
+/* Zoom chrome in the corner of an h1 gives away that it is a widget, and a
+   headline should not pan. */
+.hero-masthead .mw-zoom-btn {
+  display: none !important;
+}
+.hero-masthead,
+.hero-masthead .mw-canvas,
+.hero-masthead .mw-svg-host {
+  overflow: visible !important;
+}
+
+/* The canvas runs the full width of the window, so without an inset the diagram
+   would butt against both screen edges. This keeps a margin at every size while
+   leaving the canvas itself full-bleed. */
+.hero-masthead .mw-svg-host {
+  left: clamp(16px, 5vw, 90px);
+  right: clamp(16px, 5vw, 90px);
+}
+
+/* Under 760px the headline switches to the stacked top-down layout, which is
+   nearly square rather than wide, so the open band it is centred into has to be
+   deep enough that it is fitted by width rather than squashed by height. */
+@media (max-width: 760px) {
+  .hero-masthead {
+    height: clamp(300px, 78vw, 360px) !important;
+  }
+  .hero-hint {
+    font-size: 12px !important;
+  }
+}
+
+/* First-paint content, defined in index.html inside #root and replaced by the
+   app on mount. Vite emits the stylesheet as a real <link> and the bundle as a
+   deferred module, so this paints styled before any JavaScript runs. Positioned
+   to sit roughly where the hero headline lands, so the swap is not a jump. */
+.boot {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 150px 26px 30px;
+  text-align: center;
+}
+.boot-title {
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: clamp(34px, 5vw, 58px);
+  line-height: 1.06;
+  letter-spacing: -0.035em;
+  color: #1c1a17;
+  margin: 0;
+  text-wrap: balance;
+}
+.boot-sub {
+  max-width: 620px;
+  margin: 20px auto 0;
+  font-size: 18.5px;
+  line-height: 1.55;
+  color: #544f47;
+}
+
+/* Keeps the headline text in the document for assistive tech and crawlers,
+   since the visible version is drawn as SVG by the diagram renderer. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* The live demo embeds the real editor; keep its canvas transparent so the
    dotted preview background shows through, and center the rendered SVG the
    way the design's preview pane does. */
