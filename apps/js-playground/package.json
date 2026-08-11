@@ -18,7 +18,7 @@
     "@visimer/codemirror": "workspace:*",
     "@visimer/core": "workspace:*",
     "@visimer/dom": "workspace:*",
-    "mermaid": "^11.6.0"
+    "mermaid": "^11.16.1"
   },
   "devDependencies": {
     "typescript": "^5.6.3",
