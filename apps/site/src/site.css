@@ -55,18 +55,21 @@ textarea {
    3. Room for the popover. The edit toolbar is a child of the canvas, so a
       clipped hero would cut it in half on the first double-click.
 
-   Every rule is scoped to `.mw-svg-host > svg`, the diagram itself. A bare
-   `.mw-canvas svg` also matches the icons inside that popover, which would pin
-   each one to inset 0 and stack them into an unreadable pile. */
+   Every rule is scoped to `.hero-masthead :is(.mw-svg-host, .hero-placeholder)
+   > svg` — the live diagram and the static stand-in that holds its place, which
+   have to be styled identically or the crossfade between them stops being
+   invisible. A new rule for one of them belongs on both. A bare `.mw-canvas svg`
+   would also match the icons inside the popover, which would pin each one to
+   inset 0 and stack them into an unreadable pile. */
 /* The host has to be pinned to the card as well as the svg. Left to size itself
    it takes the diagram's natural height, and since the svg is positioned against
    the host rather than the card, the diagram then paints straight out of the
    hero — most visibly on phones, where the stacked layout is tallest. */
-.hero-masthead .mw-svg-host {
+.hero-masthead :is(.mw-svg-host, .hero-placeholder) {
   position: absolute;
   inset: 0;
 }
-.hero-masthead .mw-svg-host > svg {
+.hero-masthead :is(.mw-svg-host, .hero-placeholder) > svg {
   position: absolute;
   inset: 0;
   width: 100% !important;
@@ -74,31 +77,31 @@ textarea {
   max-width: none !important;
   transform: none !important;
 }
-.hero-masthead .mw-svg-host > svg .nodeLabel,
-.hero-masthead .mw-svg-host > svg .nodeLabel p {
+.hero-masthead :is(.mw-svg-host, .hero-placeholder) > svg .nodeLabel,
+.hero-masthead :is(.mw-svg-host, .hero-placeholder) > svg .nodeLabel p {
   font-family: 'Inter', sans-serif !important;
   font-weight: 700 !important;
   letter-spacing: -0.035em !important;
   color: #1c1a17 !important;
   fill: #1c1a17 !important;
 }
-.hero-masthead .mw-svg-host > svg foreignObject {
+.hero-masthead :is(.mw-svg-host, .hero-placeholder) > svg foreignObject {
   overflow: visible !important;
 }
-.hero-masthead .mw-svg-host > svg .nodeLabel,
-.hero-masthead .mw-svg-host > svg .nodeLabel p,
-.hero-masthead .mw-svg-host > svg .nodeLabel div {
+.hero-masthead :is(.mw-svg-host, .hero-placeholder) > svg .nodeLabel,
+.hero-masthead :is(.mw-svg-host, .hero-placeholder) > svg .nodeLabel p,
+.hero-masthead :is(.mw-svg-host, .hero-placeholder) > svg .nodeLabel div {
   overflow: visible !important;
   white-space: nowrap !important;
   max-width: none !important;
 }
-.hero-masthead .mw-svg-host > svg .edgePath path,
-.hero-masthead .mw-svg-host > svg .flowchart-link {
+.hero-masthead :is(.mw-svg-host, .hero-placeholder) > svg .edgePath path,
+.hero-masthead :is(.mw-svg-host, .hero-placeholder) > svg .flowchart-link {
   stroke: #0e7c6b !important;
   stroke-width: 2px !important;
 }
-.hero-masthead .mw-svg-host > svg marker path,
-.hero-masthead .mw-svg-host > svg .marker {
+.hero-masthead :is(.mw-svg-host, .hero-placeholder) > svg marker path,
+.hero-masthead :is(.mw-svg-host, .hero-placeholder) > svg .marker {
   fill: #0e7c6b !important;
   stroke: #0e7c6b !important;
 }
@@ -107,15 +110,15 @@ textarea {
    (the gold tint) and ignores edgeLabelBackground here, which reads as a
    highlighter chip. It matches the page instead, since the hero canvas sits
    directly on the site background with no card of its own. */
-.hero-masthead .mw-svg-host > svg .edgeLabel,
-.hero-masthead .mw-svg-host > svg .edgeLabel span,
-.hero-masthead .mw-svg-host > svg .edgeLabel p {
+.hero-masthead :is(.mw-svg-host, .hero-placeholder) > svg .edgeLabel,
+.hero-masthead :is(.mw-svg-host, .hero-placeholder) > svg .edgeLabel span,
+.hero-masthead :is(.mw-svg-host, .hero-placeholder) > svg .edgeLabel p {
   background: #f7f4ed !important;
   background-color: #f7f4ed !important;
   color: #544f47 !important;
   fill: #544f47 !important;
 }
-.hero-masthead .mw-svg-host > svg .edgeLabel rect {
+.hero-masthead :is(.mw-svg-host, .hero-placeholder) > svg .edgeLabel rect {
   fill: #f7f4ed !important;
 }
 /* Zoom chrome in the corner of an h1 gives away that it is a widget, and a
@@ -125,14 +128,14 @@ textarea {
 }
 .hero-masthead,
 .hero-masthead .mw-canvas,
-.hero-masthead .mw-svg-host {
+.hero-masthead :is(.mw-svg-host, .hero-placeholder) {
   overflow: visible !important;
 }
 
 /* The canvas runs the full width of the window, so without an inset the diagram
    would butt against both screen edges. This keeps a margin at every size while
    leaving the canvas itself full-bleed. */
-.hero-masthead .mw-svg-host {
+.hero-masthead :is(.mw-svg-host, .hero-placeholder) {
   left: clamp(16px, 5vw, 90px);
   right: clamp(16px, 5vw, 90px);
 }
@@ -149,32 +152,162 @@ textarea {
   }
 }
 
-/* First-paint content, defined in index.html inside #root and replaced by the
-   app on mount. Vite emits the stylesheet as a real <link> and the bundle as a
-   deferred module, so this paints styled before any JavaScript runs. Positioned
-   to sit roughly where the hero headline lands, so the swap is not a jump. */
-.boot {
+/* ---- Hero layout --------------------------------------------------------
+   These classes are shared by two renderers of the same block: the copy Vite
+   inlines into index.html (see src/hero-diagram.ts) and the React hero that
+   replaces it on mount. Holding the geometry in one place is what makes that
+   replacement invisible — when the two carried their own numbers, mounting
+   moved the headline down the page in front of the visitor. */
+.hero-section {
   max-width: 1180px;
   margin: 0 auto;
-  padding: 150px 26px 30px;
+  padding: 74px 26px 34px;
   text-align: center;
 }
-.boot-title {
-  font-family: 'Inter', sans-serif;
-  font-weight: 700;
-  font-size: clamp(34px, 5vw, 58px);
-  line-height: 1.06;
-  letter-spacing: -0.035em;
-  color: #1c1a17;
-  margin: 0;
-  text-wrap: balance;
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  color: #6b6559;
+  border: 1px solid #e6e0d4;
+  background: #fcfaf5;
+  padding: 6px 13px;
+  border-radius: 999px;
+  letter-spacing: 0.01em;
 }
-.boot-sub {
+.hero-badge-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 99px;
+  background: #0e7c6b;
+}
+/* Full-bleed to the window while staying in the section's flow: the band is the
+   hero, not a card inside it. */
+.hero-masthead {
+  position: relative;
+  left: 50%;
+  width: 100vw;
+  transform: translateX(-50%);
+  height: clamp(210px, 24vw, 300px);
+  margin: 26px 0 0;
+}
+.hero-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 14px 0 0;
+  font-size: 13px;
+  color: #8a857a;
+}
+.hero-hint-lead {
+  color: #0e7c6b;
+  font-weight: 600;
+}
+.hero-sub {
   max-width: 620px;
   margin: 20px auto 0;
   font-size: 18.5px;
   line-height: 1.55;
   color: #544f47;
+  text-wrap: pretty;
+}
+
+/* First-paint content, generated into index.html inside #root and replaced by
+   the app on mount. Vite emits the stylesheet as a real <link> and the bundle as
+   a deferred module, so this paints styled before any JavaScript runs.
+
+   The served copy has no navbar — that is the app's — so it opens with a spacer
+   the height of one instead, and the hero starts at the same offset in both.
+   Both read the height from the same custom property, and the real header
+   enforces it as a floor, so the two cannot silently disagree. It is a floor
+   rather than a fixed height because taller content should still grow the
+   header rather than be clipped by it; if that ever happens, this number is the
+   one to re-measure. */
+:root {
+  --site-header-h: 59px;
+}
+.site-header {
+  min-height: var(--site-header-h);
+}
+.boot-header {
+  height: var(--site-header-h);
+}
+
+/* ---- Hero stand-in ------------------------------------------------------
+   Holds the headline's place while mermaid is still on its way. Position,
+   colour and typography all come from the `.hero-masthead ... > svg` rules
+   above, which name the stand-in alongside the live canvas host precisely so
+   the two cannot be styled differently. Only the declarations mermaid ships
+   inside its own generated SVG need restating here. */
+.hero-placeholder-layer {
+  position: absolute;
+  inset: 0;
+  /* decorative, and the live canvas underneath owns every gesture */
+  pointer-events: none;
+}
+.hero-placeholder > svg .node rect {
+  fill: #eaf3f0;
+  stroke: #0e7c6b;
+  stroke-width: 1px;
+}
+.hero-placeholder > svg .flowchart-link {
+  fill: none;
+}
+.hero-placeholder > svg .hero-ph-label {
+  display: table-cell;
+  white-space: nowrap;
+  line-height: 1.5;
+  text-align: center;
+  font-size: 16px;
+}
+.hero-placeholder > svg .hero-ph-label p {
+  margin: 0;
+}
+/* Only the served document carries both orientations — it cannot know the
+   window width, so the breakpoint picks one, at the same threshold
+   HERO_STACK_MAX_WIDTH encodes. The mounted app renders a single stand-in
+   chosen from the source the editor actually got (heroPlaceholderFor), so these
+   two rules do not reach it: a media query keeps tracking the window, while the
+   diagram's orientation is fixed at mount, and letting both drive one crossfade
+   is how a settle turns into a jump. */
+.hero-placeholder-td {
+  display: none;
+}
+@media (max-width: 760px) {
+  .hero-placeholder-lr {
+    display: none;
+  }
+  .hero-placeholder-td {
+    display: block;
+  }
+}
+
+/* The handover. Both layers are fitted into the same box by the same viewBox and
+   preserveAspectRatio, so this is a crossfade between two near-identical
+   pictures rather than a swap — it reads as the headline settling, and covers
+   whatever sub-pixel drift is left between hand-drawn and rendered. */
+.hero-masthead .mw-canvas,
+.hero-placeholder-layer {
+  transition: opacity 220ms ease;
+}
+.hero-masthead .mw-canvas {
+  opacity: 0;
+}
+.hero-masthead.is-rendered .mw-canvas {
+  opacity: 1;
+}
+.hero-masthead.is-rendered .hero-placeholder-layer {
+  opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-masthead .mw-canvas,
+  .hero-placeholder-layer {
+    transition: none;
+  }
 }
 
 /* Keeps the headline text in the document for assistive tech and crawlers,
