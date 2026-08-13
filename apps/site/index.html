@@ -81,15 +81,15 @@
         empty div, so anything that does not execute JavaScript sees no headline
         at all, and the first paint is blank until the bundle has run.
 
-        Since the visible headline is drawn by mermaid at runtime, this is also
-        what shows if that render ever fails while the rest of the page works.
+        It is not a failure fallback: a render that throws still emits `render`,
+        which resolves the gate in App.tsx, fades this out and reveals the
+        canvas's own error badge. This covers the wait, not the failure.
 
-        Keep this copy in sync with the hero in App.tsx.
+        The markup is generated from src/hero-diagram.ts by the visimer-hero-boot
+        plugin in vite.config.ts, so it cannot drift from the hero it stands in
+        for. Edit that module, not the output.
       -->
-      <div class="boot">
-        <h1 class="boot-title">WYSIWYG editor renders native mermaid</h1>
-        <p class="boot-sub">Click a node to edit it. Perfect for polishing AI-generated diagrams.</p>
-      </div>
+      <!--hero-boot-->
     </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -3,6 +3,18 @@ import mermaid from 'mermaid'
 import { MermaidCanvas, useMermaidEditor } from '@visimer/react'
 import { track } from './analytics'
 import {
+  HERO_HEADLINE,
+  HERO_HINT_BODY,
+  HERO_HINT_LEAD,
+  HERO_LICENSE,
+  HERO_SOURCE_LR,
+  HERO_SOURCE_TD,
+  HERO_STACK_MAX_WIDTH,
+  HERO_SUBHEAD,
+  heroPlaceholderFor,
+  heroPlaceholderViewBox,
+} from './hero-diagram'
+import {
   CodeMirrorPane,
   Logo,
   PRESETS,
@@ -18,27 +30,10 @@ const REPO_URL = `https://github.com/${REPO}`
 const INSTALL_CMD = 'npm i @visimer/react'
 
 /**
- * The headline, as Mermaid. The verb rides the connector, which is where mermaid
- * puts verbs, so the whole thing reads as one sentence.
- *
  * Direction is picked once at mount rather than on every resize: a phone fits the
  * left-to-right layout by width, which shrinks the headline to caption size, but
  * re-picking on resize would overwrite whatever the visitor had typed into it.
  */
-const HERO_SOURCE_LR = `flowchart LR
-  A[WYSIWYG editor] -->|renders| B[native mermaid]`
-
-const HERO_SOURCE_TD = `flowchart TD
-  A[WYSIWYG editor] -->|renders| B[native mermaid]`
-
-/**
- * Inclusive at 760 to match `@media (max-width: 760px)` in site.css, which sizes
- * the band for this layout. A strict `<` disagrees with the media query at
- * exactly 760px: the band goes tall for a stacked diagram while the source is
- * still left-to-right.
- */
-const HERO_STACK_MAX_WIDTH = 760
-
 function initialHeroSource(): string {
   if (typeof window === 'undefined') return HERO_SOURCE_LR
   return window.innerWidth <= HERO_STACK_MAX_WIDTH ? HERO_SOURCE_TD : HERO_SOURCE_LR
@@ -224,6 +219,16 @@ export default function App() {
   const [heroSource, setHeroSource] = useState(heroInitial)
   useEffect(() => heroEditor.on('change', ({ code }) => setHeroSource(code.trim())), [heroEditor])
 
+  // The stand-in headline stays up until mermaid has actually put an SVG on the
+  // page, which is a good half-second after mount on a cold load: the renderer
+  // arrives over its own dynamic imports and then has to lay the diagram out.
+  // Gating on mount instead would reopen the hole this is here to close.
+  //
+  // A failed parse also resolves this — the canvas shows its own error badge for
+  // that, and a visitor who has typed the headline into an invalid state is
+  // better served seeing that badge than the original sentence sitting under it.
+  const [heroRendered, setHeroRendered] = useState(false)
+
   useCanvasControlTracking()
 
   // Expanding hands off to the dedicated /playground page, carrying the
@@ -298,7 +303,9 @@ export default function App() {
 
   const starsLabel =
     ghStars == null ? 'Star' : ghStars >= 1000 ? `${(ghStars / 1000).toFixed(1).replace(/\.0$/, '')}k` : String(ghStars)
-  const licenseLabel = 'MIT'
+  // Shared with the first-paint copy of the badge, which the build inlines into
+  // index.html from the same module.
+  const licenseLabel = HERO_LICENSE
 
   const copyInstall = () => {
     void navigator.clipboard?.writeText(INSTALL_CMD)
@@ -351,6 +358,7 @@ export default function App() {
   return (
     <div style={{ minHeight: '100vh' }}>
       <header
+        className="site-header"
         style={{
           position: 'sticky',
           top: 0,
@@ -485,23 +493,13 @@ export default function App() {
         {/* Wider than the old 1000px hero: the headline is now fit to the width of
             this container, so a narrow one renders it well below the 76px the
             text h1 used to carry. 1180 matches the demo section below it. */}
-        <section style={{ maxWidth: 1180, margin: '0 auto', padding: '74px 26px 34px', textAlign: 'center' }}>
-          <div
-            ref={badgeRef}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 9,
-              fontSize: 13,
-              color: '#6B6559',
-              border: '1px solid #E6E0D4',
-              background: '#FCFAF5',
-              padding: '6px 13px',
-              borderRadius: 999,
-              letterSpacing: '0.01em',
-            }}
-          >
-            <span style={{ width: 7, height: 7, borderRadius: 99, background: '#0E7C6B', display: 'inline-block' }} />
+        {/* Geometry for this block lives in site.css rather than inline, because
+            the served document paints a copy of it before React exists (see
+            hero-diagram.ts). Two sources for the same vertical rhythm means the
+            mount visibly nudges the page; one means it does not. */}
+        <section className="hero-section">
+          <div ref={badgeRef} className="hero-badge">
+            <span className="hero-badge-dot" />
             Open source · {licenseLabel} · React &amp; vanilla
           </div>
 
@@ -527,19 +525,19 @@ export default function App() {
               somebody types would churn the accessibility tree and the document
               outline for a change only the editing visitor made, to their own
               local copy. The live source is echoed in the hint line below instead. */}
-          <h1 className="sr-only">WYSIWYG editor renders native mermaid</h1>
-          <div
-            className="hero-masthead"
-            aria-hidden
-            style={{
-              position: 'relative',
-              left: '50%',
-              width: '100vw',
-              transform: 'translateX(-50%)',
-              height: 'clamp(210px, 24vw, 300px)',
-              margin: '26px 0 0',
-            }}
-          >
+          <h1 className="sr-only">{HERO_HEADLINE}</h1>
+          <div className={`hero-masthead${heroRendered ? ' is-rendered' : ''}`} aria-hidden>
+            {/* Same markup the served document already painted, minus the
+                media-query orientation pick: this one is fed the source the
+                editor actually got, so both halves of the crossfade follow one
+                decision. Rendering it again here rather than leaving the boot
+                copy in place keeps the band under React's control — the copy is
+                torn out with the rest of #root on mount, and this one crossfades
+                out on its own schedule. */}
+            <div
+              className="hero-placeholder-layer"
+              dangerouslySetInnerHTML={{ __html: heroPlaceholderFor(heroInitial) }}
+            />
             <MermaidCanvas
               editor={heroEditor}
               mermaid={mermaid}
@@ -556,41 +554,44 @@ export default function App() {
               // nothing, since editing here is pointer-only.
               onReady={(view) => {
                 view.container.tabIndex = -1
+                // Only the first render is comparable to the stand-in; once the
+                // visitor edits the headline the diagram is legitimately a
+                // different shape.
+                let driftChecked = false
+                // The view kicks off its first render in its constructor and
+                // awaits mermaid before emitting, so this subscription is in
+                // place well before the event it is waiting for.
+                view.on('render', () => {
+                  setHeroRendered(true)
+                  // Nothing else notices when the stand-in's hand-measured
+                  // coordinates stop matching mermaid's output — reword the
+                  // hero, retune heroConfig or bump mermaid and the only symptom
+                  // is a stand-in that shifts as it fades, on a cold load, which
+                  // is invisible in normal development. The viewBox is the one
+                  // number the whole fit depends on, so compare it here.
+                  if (import.meta.env.DEV && !driftChecked) {
+                    driftChecked = true
+                    const rendered = view.container.querySelector('.mw-svg-host > svg')?.getAttribute('viewBox')
+                    const expected = heroPlaceholderViewBox(heroInitial)
+                    if (rendered && rendered !== expected) {
+                      console.warn(
+                        `[hero] stand-in viewBox is stale: mermaid rendered "${rendered}", hero-diagram.ts has "${expected}". Re-derive the coordinates in hero-diagram.ts.`,
+                      )
+                    }
+                  }
+                })
               }}
             />
           </div>
-          <div
-            className="hero-hint"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 10,
-              flexWrap: 'wrap',
-              margin: '14px 0 0',
-              fontSize: 13,
-              color: '#8A857A',
-            }}
-          >
-            <span style={{ color: '#0E7C6B', fontWeight: 600 }}>That headline is a live Mermaid diagram.</span>
-            <span>Double-click a word to rewrite it.</span>
+          <div className="hero-hint">
+            <span className="hero-hint-lead">{HERO_HINT_LEAD}</span>
+            <span>{HERO_HINT_BODY}</span>
             {/* the statement line only: "flowchart LR" is noise in a one-line hint */}
             <code style={{ fontFamily: mono, fontSize: 12.5, color: '#6B6559' }}>
               {heroSource.split('\n').slice(1).join(' ').replace(/\s+/g, ' ').trim()}
             </code>
           </div>
-          <p
-            style={{
-              maxWidth: 620,
-              margin: '20px auto 0',
-              fontSize: 18.5,
-              lineHeight: 1.55,
-              color: '#544F47',
-              textWrap: 'pretty',
-            }}
-          >
-            Click a node to edit it. Perfect for polishing AI-generated diagrams.
-          </p>
+          <p className="hero-sub">{HERO_SUBHEAD}</p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap', marginTop: 30 }}>
             <a
               href="/playground"
