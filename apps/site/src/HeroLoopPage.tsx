@@ -38,9 +38,15 @@ export default function HeroLoopPage() {
     const ghost = ghostRef.current
     if (!canvas || !codePane || !cursor || !ghost) return
 
+    // wrappingWidth is 200 by default — narrow enough that any single-line
+    // hero label past ~14 chars trips mermaid's `display: table; white-
+    // space: break-spaces; width: 200px` wrap-safe layout and reserves a
+    // phantom second line of height even when the SVG expands to fit the
+    // text on one visual line. Bump it so hero labels stay one line tall.
     mermaid.initialize({
       startOnLoad: false,
       theme: 'base',
+      flowchart: { wrappingWidth: 800 },
       themeVariables: {
         fontFamily: '"Inter", sans-serif',
         primaryColor: '#EAF3F0',
@@ -62,6 +68,11 @@ export default function HeroLoopPage() {
       debounceMs: 0,
       mermaidConfig: {
         theme: 'base',
+        // MermaidCanvasView calls `mermaid.initialize(mermaidConfig)` on
+        // every render, so the bump above must be repeated here or the
+        // very first re-render (after an edit) clobbers wrappingWidth
+        // back to the 200 default and the ghost-newline returns.
+        flowchart: { wrappingWidth: 800 },
         themeVariables: {
           fontFamily: '"Inter", sans-serif',
           primaryColor: '#EAF3F0',

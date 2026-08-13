@@ -120,13 +120,20 @@ function readEdgeAnimation(code: string, edgeOrder: number): EdgeAnimation {
  * Inject the `@keyframes vsmr-flow` rule that the `linkStyle` animation emitter
  * references. Called once per render so a re-render replacing the SVG picks
  * the rule back up; idempotent within a single SVG.
+ *
+ * The offset per cycle MUST be an integer multiple of the visual dash period
+ * (`stroke-dasharray: 8` → dash + gap = 16). Anything else and the pattern
+ * snaps back at the loop boundary because the ending position doesn't line
+ * up with the starting one — the old `-20` end-value snapped by 4 units
+ * (`-20 mod 16 = -4`) every cycle. `-16` completes exactly one dash cycle
+ * per animation loop, so the transition from 100% → 0% is invisible.
  */
 function injectAnimationKeyframes(svg: SVGElement): void {
   if (svg.querySelector('style[data-vsmr-flow]')) return
   const doc = svg.ownerDocument
   const style = doc.createElementNS('http://www.w3.org/2000/svg', 'style')
   style.setAttribute('data-vsmr-flow', '')
-  style.textContent = '@keyframes vsmr-flow { to { stroke-dashoffset: -20; } }'
+  style.textContent = '@keyframes vsmr-flow { to { stroke-dashoffset: -16; } }'
   svg.insertBefore(style, svg.firstChild)
 }
 
@@ -246,7 +253,35 @@ let renderIdCounter = 0
  * inside labels; the parser rejects anything it doesn't know).
  */
 function readLabelHtml(label: HTMLElement): string {
-  return (label.innerHTML ?? '').replace(/<br\s*\/?>/gi, '<br/>').trim()
+  return (label.innerHTML ?? '')
+    .replace(/<br\s*\/?>/gi, '<br/>')
+    // Chromium's contenteditable substitutes `&nbsp;` for a trailing (or
+    // adjacent) space so the character stays visible. As raw HTML that's
+    // the six-character sequence `&nbsp;` — the `&` matches NEEDS_QUOTE,
+    // so an intermediate typing state ("WYSIWYG editor" + SPACE →
+    // "WYSIWYG editor&nbsp;") gets wrapped in quotes on the live commit
+    // and `renameNode`'s `ref.quoted` branch then preserves the quotes
+    // forever, even after the trailing space is followed by more
+    // characters. Canonicalising the entity to a real space lets the
+    // trim below strip it so the label reads cleanly and the source
+    // rewriter never sees the transient `&`.
+    .replace(/&nbsp;/gi, ' ')
+    .trim()
+}
+
+/**
+ * DOM-faithful read of the same label, used ONLY for the mid-flight snapshot
+ * that a mermaid re-render immediately reinjects into the freshly rendered
+ * label (`label.innerHTML = liveEdit.value`). The snapshot has to preserve
+ * exactly what was on screen: an in-flight render that resolves the same
+ * instant the user types a trailing space would otherwise lose that space
+ * to `readLabelHtml`'s canonicalisation + trim, and the next keystroke
+ * would land against the previous word. `<br/>` normalisation is still
+ * safe here because mermaid emits `<br/>` in the source and both browsers
+ * accept either serialisation.
+ */
+function readLabelSnapshot(label: HTMLElement): string {
+  return (label.innerHTML ?? '').replace(/<br\s*\/?>/gi, '<br/>')
 }
 
 /**
@@ -765,7 +800,11 @@ export class MermaidCanvasView {
       const midFlightSession = this.activeInPlaceSession()
       const editingLabel = midFlightSession?.label
       if (midFlightSession && editingLabel?.isConnected) {
-        liveEdit = { value: readLabelHtml(editingLabel), caret: caretOffsetWithin(editingLabel) }
+        // Snapshot the label's raw innerHTML (DOM-faithful, no trim, no
+        // `&nbsp;` canonicalisation) so `resumeInPlaceSession` below can
+        // reinject exactly what was on screen. Using `readLabelHtml` here
+        // would strip a just-typed trailing space out of the snapshot.
+        liveEdit = { value: readLabelSnapshot(editingLabel), caret: caretOffsetWithin(editingLabel) }
         // a pending live-commit timer closes over the label we are about to
         // detach; the reinjection below reschedules it against the new one
         if (midFlightSession.liveTimer) {
@@ -1430,7 +1469,14 @@ export class MermaidCanvasView {
     // freshly rendered label only carries the committed text
     const label = this.inPlaceSession === session ? session.label : null
     if (!label || !liveEdit) return
-    if (liveEdit.value && liveEdit.value !== session.lastCommitted && liveEdit.value !== readLabelHtml(label)) {
+    // Compare snapshot-form to snapshot-form so the equality gate reflects
+    // the actual DOM (readLabelHtml would drop `&nbsp;` on one side and
+    // always force a reinject).
+    if (
+      liveEdit.value &&
+      liveEdit.value !== session.lastCommitted &&
+      liveEdit.value !== readLabelSnapshot(label)
+    ) {
       label.innerHTML = liveEdit.value
       // run the carried-over delta through the normal live-commit debounce
       label.dispatchEvent(new Event('input'))

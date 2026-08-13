@@ -52,7 +52,13 @@ function initialHeroSource(): string {
  */
 const heroConfig = {
   theme: 'base',
-  flowchart: { padding: 11, nodeSpacing: 44, rankSpacing: 44, useMaxWidth: false },
+  // wrappingWidth defaults to 200: any single-line label past ~14 chars
+  // trips mermaid's `display: table; white-space: break-spaces; width:
+  // 200px` wrap-safe layout and reserves a phantom second line of
+  // height (the "newline under the first node text" bug: type " NEW
+  // TEXT" into "WYSIWYG editor" and the box grows by ~24 px). Bumping
+  // it lets typical hero labels stay on one line and one line high.
+  flowchart: { padding: 11, nodeSpacing: 44, rankSpacing: 44, useMaxWidth: false, wrappingWidth: 800 },
   themeVariables: {
     fontFamily: "'Inter', sans-serif",
     primaryColor: '#EAF3F0',
