@@ -1,5 +1,11 @@
 # @visimer/codemirror
 
+## 1.1.1
+
+### Patch Changes
+
+- @visimer/core@1.1.1
+
 ## 1.1.0
 
 ### Patch Changes
