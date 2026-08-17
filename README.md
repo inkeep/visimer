@@ -24,6 +24,8 @@ AI is great for generating Mermaid diagrams that help explain concepts visually.
 - Use as a component library that can be embedded in any application. 
 - Use with a Markdown editing app like [OpenKnowledge](https://openknowledge.ai/) to edit Mermaid diagrams in your markdown.
 
+Read the [launch post](https://openknowledge.ai/blog/edit-mermaid-diagrams-visually) for the story and a live editable diagram.
+
 ## Quick start
 
 ```bash
