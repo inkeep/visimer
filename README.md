@@ -123,12 +123,13 @@ Some other editor? Implement the adapter, it's about forty lines.
 
 ## Design
 
-```
-      code (source of truth)
-        ⇅ minimal TextEdits
-   lossless CST → semantic graph
-        ⇅                ⇅
-  CodeMirror pane   Mermaid SVG + overlay
+```mermaid
+flowchart TD
+  SRC["Your Mermaid source"] --> MR["Mermaid.js renderer (unmodified)"]
+  MR --> SVG["Rendered SVG"]
+  SVG --> COR["Correlator: SVG element → CST span"]
+  COR --> OV["Point-edit overlay"]
+  OV -->|"minimal text edit"| SRC
 ```
 
 ## License
