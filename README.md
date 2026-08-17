@@ -1,26 +1,28 @@
 <div align="center">
 
-# visimer
+# Visimer
 
-**Visual editing for Mermaid diagrams. Every gesture becomes a minimal text edit.**
+**Visual editor for Mermaid diagrams.**
 
-Click, drag, and type directly on the diagram; your Mermaid source updates surgically.
-Type in the code; the canvas follows live. One document, two surfaces, zero lock-in.
+Visimer brings "what you see is what you get" editability to Mermaid diagrams. Rename labels, change shapes, add new nodes, etc. by live editing the rendered diagram.
 
 [![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Mermaid 11](https://img.shields.io/badge/mermaid-v11-ff3670.svg)](https://mermaid.js.org)
 [![Types](https://img.shields.io/badge/types-included-3178c6.svg)](#packages)
 
-![Editing a node label and drawing a new edge; source updates on every gesture](./assets/hero-loop.webp)
+![A node label is double-clicked and retyped on the canvas; the matching line of Mermaid source rewrites live as it is typed](./assets/hero-loop.webp)
 
 </div>
 
 ---
 
 ## Why
+AI is great for generating Mermaid diagrams that help explain concepts visually. We wanted to make it easy to edit fine details visually without digging into Mermaid syntax.
 
-Mermaid has become the diagram language of choice for Markdown files. The mermaid ecosystem lacked open source visual editors. Consumers had to use proprietary tools or one-way exporters. `visimer` keeps **text as the source of truth**: the canvas is Mermaid's own SVG with an interaction layer on top, and every visual action (rename, connect, reorder, restyle) compiles to the smallest possible edit against your actual source. Comments, whitespace, and formatting are never touched. Drag one edge,\
-get a one-line diff.
+## Usage
+
+- Use as a component library that can be embedded in any application. 
+- Use with a Markdown editing app like [OpenKnowledge](https://openknowledge.ai/) to edit Mermaid diagrams in your markdown.
 
 ## Quick start
 
@@ -55,7 +57,7 @@ pnpm install && pnpm dev   # playground at http://localhost:5173
 
 ## Try with Open Knowledge
 
-Every `.mmd` and Markdown editor in [Open Knowledge](https://openknowledge.ai) ships visimer as its diagram surface. Open a project and you get the same click-a-node-to-edit canvas over your own docs, wired up with realtime collaboration, git-backed history, and shareable links. The fastest way to try visimer on real diagrams is [openknowledge.ai](https://openknowledge.ai).
+[OpenKnowledge](https://openknowledge.ai) is a markdown editor that allows WYSIWYG editing of markdown files. It leverages Visimer as the native visual editor for Mermaid diagrams. Available as a Mac, Linux, and Windows IDE-style app or npm package.
 
 ## What you can do
 
@@ -115,6 +117,10 @@ the CodeMirror and Monaco packages are implementations of it, and neither is pul
 in unless you install it (editor libraries are peer dependencies or absent entirely).
 Some other editor? Implement the adapter, it's about forty lines.
 
+## Architecture
+- Leverages the native Mermaid.js renderer for visualizing the Mermaid diagram true to how it’s intended. We just overlay/add point-edit functionality on top.
+- We map the rendered SVG elements back to a Concrete Syntax Tree (CST) representation, which we can then use to edit only the parts of the Mermaid source that need updating (without affecting the rest of the file).
+
 ## Design
 
 ```
@@ -124,12 +130,6 @@ Some other editor? Implement the adapter, it's about forty lines.
         ⇅                ⇅
   CodeMirror pane   Mermaid SVG + overlay
 ```
-
-## How the canvas works
-
-We never re-implement rendering. Mermaid draws the SVG, untouched. A small per-type correlator then matches every element back to its source line, using id conventions, draw order, or label text, and tags it. All interaction hangs off those tags.
-
-Anything we can't match degrades to view-only; the diagram still renders perfectly and the code stays editable. The tradeoff is that correlation leans on Mermaid's internal DOM, which can shift between releases. It's contained, because correlators are tiny, isolated, and fail soft. That's the price of pixel-perfect fidelity, and it beats owning a renderer that's wrong in a hundred small ways.
 
 ## License
 
