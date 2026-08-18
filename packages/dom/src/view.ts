@@ -405,6 +405,9 @@ export class MermaidCanvasView {
   private zoomControls: HTMLElement | null = null
   /** per-instance staleness counter; a shared one would drop renders across instances */
   private renderSeq = 0
+  /** a font-settled re-measure is already armed; don't stack a second one */
+  private awaitingFonts = false
+  private destroyed = false
 
   constructor(options: ViewOptions) {
     this.editor = options.editor
@@ -825,6 +828,7 @@ export class MermaidCanvasView {
       }
       this.editor.setDiagnostics([])
       this.emit('render', { ok: true })
+      this.remeasureWhenFontsSettle()
       if (this.activeInPlaceSession()) {
         this.resumeInPlaceSession(liveEdit)
       } else if (this.pendingEditEntity) {
@@ -845,6 +849,43 @@ export class MermaidCanvasView {
       this.editor.setDiagnostics([diag])
       this.emit('render', { ok: false, error: message })
     }
+  }
+
+  /**
+   * Mermaid measures label text against the fonts the document can use at the
+   * moment it renders, then bakes those measurements into fixed-width
+   * `foreignObject` boxes. A webfont that lands afterwards — the normal case
+   * on a first visit, where `font-display: swap` deliberately paints fallback
+   * text first — is wider than the box measured for the fallback, so every
+   * label ends up clipped a few pixels short for the rest of the session.
+   * Nothing in mermaid or in the browser re-measures on its own.
+   *
+   * So once the document's fonts have settled, render again. Asking *after*
+   * the render matters: mermaid's own measuring pass is usually what first
+   * requests the webfont, so the pending load is only visible by then.
+   *
+   * This cannot loop. It arms only while fonts are still loading, and by the
+   * time `ready` resolves the status is `loaded`, so the corrective render
+   * arms nothing. A font that starts loading later (a host swapping theme
+   * fonts at runtime) flips the status back and correctly arms a fresh wait.
+   */
+  private remeasureWhenFontsSettle() {
+    // no FontFaceSet in older browsers and in jsdom; nothing to wait on
+    const fonts: FontFaceSet | undefined = typeof document === 'undefined' ? undefined : document.fonts
+    if (!fonts || this.awaitingFonts || fonts.status === 'loaded') return
+    this.awaitingFonts = true
+    const remeasure = () => {
+      this.awaitingFonts = false
+      if (this.destroyed) return
+      // the code has not changed, so render() would short-circuit on
+      // lastRenderedCode — clear it to force the re-measure through
+      this.lastRenderedCode = ''
+      void this.render()
+    }
+    // `ready` is spec'd never to reject, but a partial polyfill could. Either
+    // way the measurements are as final as they are going to get, so both
+    // settlements take the same path.
+    void Promise.resolve(fonts.ready).then(remeasure, remeasure)
   }
 
   private bindSvg() {
@@ -2642,6 +2683,7 @@ export class MermaidCanvasView {
   }
 
   destroy() {
+    this.destroyed = true
     if (this.renderTimer) clearTimeout(this.renderTimer)
     if (this.lifelineClearTimer) clearTimeout(this.lifelineClearTimer)
     if (this.inPlaceSession?.liveTimer) clearTimeout(this.inPlaceSession.liveTimer)
