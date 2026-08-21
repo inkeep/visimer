@@ -9,6 +9,7 @@ import {
   type FlowCurve,
   type MessageOp,
   type ParticipantType,
+  type SequenceGraph,
   type ShapeId,
 } from '@visimer/core'
 import {
@@ -347,6 +348,15 @@ export class MermaidCanvasView {
   private svg: SVGSVGElement | null = null
   /** tracks external transforms on the svg (host pan/zoom toolbars) */
   private svgTransformObserver: MutationObserver | null = null
+  /**
+   * Re-runs sequence correlation (not `bindSvg`, which would double-register
+   * every pointer/click handler) once a hidden-mount SVG becomes visible.
+   * Sequence correlation matches lifelines by geometry, and
+   * `getBoundingClientRect` returns all zeros for a `display:none` ancestor,
+   * so the initial pass skips lifeline correlation and this observer picks
+   * it up on reveal.
+   */
+  private visibilityRetryObserver: IntersectionObserver | null = null
   private popoverFollowRaf = 0
   /** our own pan/zoom writes must not trip the external-transform observer */
   private applyingOwnTransform = false
@@ -909,6 +919,7 @@ export class MermaidCanvasView {
                   : null
     this.seqCorrelation = sequence ? correlateSequence(svg, sequence) : null
     this.clearLifelineUi()
+    this.armVisibilityRetry(svg, sequence)
 
     svg.addEventListener('click', (e) => this.onSvgClick(e))
     svg.addEventListener('dblclick', (e) => this.onSvgDblClick(e))
@@ -945,6 +956,31 @@ export class MermaidCanvasView {
     }
 
     this.applySelectionStyles()
+  }
+
+  private armVisibilityRetry(svg: SVGSVGElement, sequence: SequenceGraph | null): void {
+    this.visibilityRetryObserver?.disconnect()
+    this.visibilityRetryObserver = null
+    if (!sequence) return
+    // Key retry off the correlation result: an empty lifelines map is the
+    // hidden-mount case (the same predicate the guard in correlate.ts
+    // enforces). Avoids re-checking bbox with inverted polarity in two
+    // files.
+    if (this.seqCorrelation && this.seqCorrelation.lifelines.size > 0) return
+    if (typeof IntersectionObserver === 'undefined') return
+    this.visibilityRetryObserver = new IntersectionObserver((entries) => {
+      if (!entries.some((e) => e.intersectionRatio > 0)) return
+      // The intersection notification can fire while the SVG is still in a
+      // zero-width flex parent mid-transition; re-check before burning the
+      // one-shot so a permanently degraded state can't lock in.
+      if (svg.getBoundingClientRect().width === 0) return
+      this.visibilityRetryObserver?.disconnect()
+      this.visibilityRetryObserver = null
+      // Re-run correlation only; bindSvg's addEventListener block would
+      // double-register every pointer/click handler.
+      if (this.svg === svg) this.seqCorrelation = correlateSequence(svg, sequence)
+    })
+    this.visibilityRetryObserver.observe(svg)
   }
 
   private entityFromEvent(e: Event): string | null {
@@ -2690,6 +2726,8 @@ export class MermaidCanvasView {
     this.inPlaceSession = null
     this.svgTransformObserver?.disconnect()
     this.svgTransformObserver = null
+    this.visibilityRetryObserver?.disconnect()
+    this.visibilityRetryObserver = null
     this.disposers.forEach((d) => d())
     this.plusDragCleanup?.()
     this.closeInlineEditor(false)

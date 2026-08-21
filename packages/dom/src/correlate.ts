@@ -502,24 +502,32 @@ export function correlateSequence(svg: SVGSVGElement, graph: SequenceGraph): Seq
   }
 
   // --- lifelines: match by x proximity to each participant's box (DOM order
-  // of `line.actor-line` is NOT guaranteed to follow declaration order)
-  const lifelineEls = [...svg.querySelectorAll<SVGLineElement>('line.actor-line, .actor-line')]
-  for (const p of graph.participants) {
-    const els = participants.get(p.entityId)
-    if (!els?.length) continue
-    const box = (els[0] as SVGGraphicsElement).getBoundingClientRect()
-    const cx = box.left + box.width / 2
-    let best: SVGLineElement | null = null
-    let bestDist = Infinity
-    for (const l of lifelineEls) {
-      const r = l.getBoundingClientRect()
-      const d = Math.abs(r.left + r.width / 2 - cx)
-      if (d < bestDist) {
-        bestDist = d
-        best = l as SVGLineElement
+  // of `line.actor-line` is NOT guaranteed to follow declaration order).
+  // Skip only the lifeline matching when the SVG isn't laid out yet (mounted
+  // under a `display:none` ancestor): every `getBoundingClientRect()`
+  // returns all-zero rects, so every participant would collapse onto
+  // whichever lifeline appears first in DOM order. Leaving `lifelines` empty
+  // degrades to no lifeline hover on this pass; messages and notes
+  // (index-based) still correlate below.
+  if (svg.getBoundingClientRect().width !== 0) {
+    const lifelineEls = [...svg.querySelectorAll<SVGLineElement>('line.actor-line, .actor-line')]
+    for (const p of graph.participants) {
+      const els = participants.get(p.entityId)
+      if (!els?.length) continue
+      const box = (els[0] as SVGGraphicsElement).getBoundingClientRect()
+      const cx = box.left + box.width / 2
+      let best: SVGLineElement | null = null
+      let bestDist = Infinity
+      for (const l of lifelineEls) {
+        const r = l.getBoundingClientRect()
+        const d = Math.abs(r.left + r.width / 2 - cx)
+        if (d < bestDist) {
+          bestDist = d
+          best = l as SVGLineElement
+        }
       }
+      if (best && bestDist < 40) lifelines.set(p.entityId, best)
     }
-    if (best && bestDist < 40) lifelines.set(p.entityId, best)
   }
 
   // --- messages: text.messageText + messageLine paths, both in message order
