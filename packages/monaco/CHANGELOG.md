@@ -1,5 +1,11 @@
 # @visimer/monaco
 
+## 1.1.2
+
+### Patch Changes
+
+- @visimer/core@1.1.2
+
 ## 1.1.1
 
 ### Patch Changes
