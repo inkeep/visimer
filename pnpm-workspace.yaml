@@ -1,3 +1,10 @@
 packages:
   - packages/*
   - apps/*
+
+pmOnFail: ignore
+verifyDepsBeforeRun: false
+
+allowBuilds:
+  core-js: false
+  esbuild: true
