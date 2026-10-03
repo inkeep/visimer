@@ -45,7 +45,9 @@ jobs:
           fetch-depth: 0
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4
+        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2.0.2
+        with:
+          install: false
 
       - name: Setup Node for OIDC publishing
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
