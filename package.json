@@ -3,6 +3,7 @@
   "private": true,
   "packageManager": "pnpm@10.33.0",
   "scripts": {
+    "check:agent": "node scripts/check-agent.mjs test",
     "dev": "pnpm --filter playground dev",
     "build": "pnpm -r --filter './packages/*' build",
     "test": "pnpm -r run test",
