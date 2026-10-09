@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { constants } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -40,10 +41,13 @@ for (const arg of rest) {
 const comparison = base ?? ((process.env.GATE_BASE_SHA || '').trim() || null);
 
 if (!existsSync(join(ROOT, INSTALLED))) {
-  refuse(
-    `its dependencies are not installed (${INSTALLED} is missing), so the round cannot run. Install them with ${INSTALL}, then re-run.`,
-    2
+  console.error(
+    `check:agent (${SUBTREE}): its dependencies are not installed (${INSTALLED} is missing), so the round cannot run. Install them with ${INSTALL}, then re-run.`
   );
+  console.error(
+    `NOT-RUN: check:agent (${SUBTREE}) (its dependencies are not installed: ${INSTALLED} is missing; install them with ${INSTALL}, then re-run)`
+  );
+  process.exit(77);
 }
 
 const widened = all
@@ -54,5 +58,9 @@ console.log(
 );
 const result = spawnSync('pnpm', ['run', script], { cwd: ROOT, stdio: 'inherit' });
 if (result.error) refuse(`pnpm could not be started: ${result.error.message}`, 1);
-if (result.signal) refuse(`\`pnpm run ${script}\` was killed by signal ${result.signal}`, 1);
+if (result.signal)
+  refuse(
+    `\`pnpm run ${script}\` was killed by signal ${result.signal}`,
+    128 + constants.signals[result.signal]
+  );
 process.exit(result.status ?? 1);
