@@ -11,6 +11,7 @@ import type { MermaidCanvasView, Tool } from '@visimer/dom'
 import { MermaidCanvas, useMermaidEditor } from '@visimer/react'
 import { MermaidCodeMirror } from '@visimer/codemirror'
 import { MonacoPane } from './MonacoPane'
+import { useResizablePanel } from './hooks/useResizablePanel'
 import { SAMPLES } from '../../js-playground/src/samples'
 
 let zenumlReady: Promise<boolean> | null = null
@@ -201,6 +202,7 @@ function Workspace({ code, theme, readOnly }: { code: string; theme: string; rea
   const [tool, setToolState] = useState<Tool>('select')
   const [status, setStatus] = useState<string | null>(null)
   const [pane, setPane] = useState<'codemirror' | 'monaco'>('codemirror')
+  const panelWidth = useResizablePanel()
 
   // theme changes flow through the MermaidCanvas mermaidConfig prop
 
@@ -245,7 +247,8 @@ function Workspace({ code, theme, readOnly }: { code: string; theme: string; rea
           style={{ height: '100%' }}
         />
       </main>
-      <section className="codepanel">
+      <div className="resizer" onMouseDown={panelWidth.startDrag} />
+      <section className="codepanel" style={{ width: panelWidth.width, flexBasis: panelWidth.width }}>
         <div className="panel-title">
           <span className="panel-title-left">
             Mermaid source

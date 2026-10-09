@@ -120,18 +120,31 @@ select { appearance: none; padding-right: 26px; background-image: url("data:imag
 .canvas svg span.edgeLabel:not(:empty) { border-radius: 4px; padding: 1px 6px; margin: -1px -6px; display: inline-block; }
 .canvas svg span.edgeLabel:empty { background: transparent !important; }
 
+/* resizer */
+.resizer {
+  flex: 0 0 auto; width: 5px; cursor: col-resize; background: transparent;
+  position: relative;
+}
+.resizer::after {
+  content: ''; position: absolute; top: 0; bottom: 0; left: 2px; width: 1px;
+  background: var(--border);
+}
+.resizer:hover::after, body.resizing .resizer::after { background: var(--blue); width: 2px; left: 1.5px; }
+body.resizing { cursor: col-resize; user-select: none; }
+body.resizing * { user-select: none; }
+
 /* code panel */
 .codepanel {
-  flex: 1 1 44%; min-width: 340px; max-width: 46%;
-  display: flex; flex-direction: column; border-left: 1px solid var(--border);
+  flex: 0 0 auto; min-width: 340px; max-width: 70%;
+  display: flex; flex-direction: column;
 }
 .panel-title {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 8px 14px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  gap: 6px 12px; padding: 8px 14px; border-bottom: 1px solid var(--border);
   font-size: 11px; font-weight: 500; color: var(--dimmer);
   text-transform: uppercase; letter-spacing: 0.06em;
 }
-.panel-title-left { display: flex; align-items: center; gap: 10px; }
+.panel-title-left { display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; }
 .seg {
   display: inline-flex; padding: 2px; gap: 2px;
   border: 1px solid var(--border); border-radius: 6px; background: var(--panel);
@@ -146,6 +159,7 @@ select { appearance: none; padding-right: 26px; background-image: url("data:imag
 .badge {
   font-size: 11px; text-transform: none; letter-spacing: 0; font-weight: 500;
   padding: 2px 8px; border-radius: 99px; border: 1px solid var(--border-strong); color: var(--dim);
+  flex: 0 0 auto; white-space: nowrap;
 }
 .badge.edit { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, transparent); }
 
