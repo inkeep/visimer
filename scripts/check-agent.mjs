@@ -1,14 +1,56 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { constants } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SUBTREE = 'Visimer';
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
-const INSTALLED = 'node_modules/.modules.yaml';
+const LOCKFILE = 'pnpm-lock.yaml';
+const INSTALLED_LOCKFILE = 'node_modules/.pnpm/lock.yaml';
 const INSTALL = `\`pnpm install\` in ${ROOT}`;
+
+function readIfPresent(path) {
+  try {
+    return { bytes: readFileSync(join(ROOT, path)) };
+  } catch (e) {
+    if (e.code === 'ENOENT') return { bytes: null };
+    return { problem: { state: 'unreadable', path, code: e.code } };
+  }
+}
+
+function installProblem() {
+  if (!existsSync(join(ROOT, 'node_modules'))) return { state: 'not installed', why: 'node_modules is missing' };
+  const wanted = readIfPresent(LOCKFILE);
+  if (wanted.problem) return wanted.problem;
+  if (wanted.bytes === null) return null;
+  const installed = readIfPresent(INSTALLED_LOCKFILE);
+  if (installed.problem) return installed.problem;
+  if (installed.bytes === null) return { state: 'stale', why: `${INSTALLED_LOCKFILE} is missing` };
+  return wanted.bytes.equals(installed.bytes) ? null : { state: 'stale', why: `${INSTALLED_LOCKFILE} differs from ${LOCKFILE}` };
+}
+
+function refusalLines(problem) {
+  if (problem.state === 'unreadable') {
+    const fix =
+      problem.path === LOCKFILE
+        ? `make ${LOCKFILE} readable`
+        : `make node_modules readable (chmod -R u+rwX ${ROOT}/node_modules), or remove node_modules and run ${INSTALL}`;
+    return [
+      `check:agent (${SUBTREE}): its install could not be read (${problem.path}: ${problem.code}), so whether its dependencies match its lockfile cannot be told. Fix it: ${fix}, then re-run.`,
+      `NOT-RUN: check:agent (${SUBTREE}) (${problem.path} could not be read: ${problem.code}; ${fix}, then re-run)`
+    ];
+  }
+  const consequence =
+    problem.state === 'stale'
+      ? 'so the round would run against dependencies its lockfile does not name'
+      : 'so the round cannot run';
+  return [
+    `check:agent (${SUBTREE}): its dependencies are ${problem.state} (${problem.why}), ${consequence}. Install them with ${INSTALL}, then re-run.`,
+    `NOT-RUN: check:agent (${SUBTREE}) (its dependencies are ${problem.state}: ${problem.why}; install them with ${INSTALL}, then re-run)`
+  ];
+}
 
 function refuse(message, status) {
   console.error(`check:agent (${SUBTREE}): ${message}`);
@@ -40,13 +82,9 @@ for (const arg of rest) {
 }
 const comparison = base ?? ((process.env.GATE_BASE_SHA || '').trim() || null);
 
-if (!existsSync(join(ROOT, INSTALLED))) {
-  console.error(
-    `check:agent (${SUBTREE}): its dependencies are not installed (${INSTALLED} is missing), so the round cannot run. Install them with ${INSTALL}, then re-run.`
-  );
-  console.error(
-    `NOT-RUN: check:agent (${SUBTREE}) (its dependencies are not installed: ${INSTALLED} is missing; install them with ${INSTALL}, then re-run)`
-  );
+const problem = installProblem();
+if (problem) {
+  for (const line of refusalLines(problem)) console.error(line);
   process.exit(77);
 }
 
