@@ -270,19 +270,14 @@ function readLabelHtml(label: HTMLElement): string {
     .trim()
 }
 
-/**
- * DOM-faithful read of the same label, used ONLY for the mid-flight snapshot
- * that a mermaid re-render immediately reinjects into the freshly rendered
- * label (`label.innerHTML = liveEdit.value`). The snapshot has to preserve
- * exactly what was on screen: an in-flight render that resolves the same
- * instant the user types a trailing space would otherwise lose that space
- * to `readLabelHtml`'s canonicalisation + trim, and the next keystroke
- * would land against the previous word. `<br/>` normalisation is still
- * safe here because mermaid emits `<br/>` in the source and both browsers
- * accept either serialisation.
- */
 function readLabelSnapshot(label: HTMLElement): string {
   return (label.innerHTML ?? '').replace(/<br\s*\/?>/gi, '<br/>')
+}
+
+interface LiveEdit {
+  value: string
+  nodes: Node[]
+  caret: number
 }
 
 /**
@@ -391,6 +386,8 @@ export class MermaidCanvasView {
     entityId: string
     labelSelector: string
     original: string
+    originalNodes: Node[]
+    openedOn: HTMLElement
     lastCommitted: string
     caretOffset: number
     commitValue: (v: string) => void
@@ -809,15 +806,15 @@ export class MermaidCanvasView {
       // destroys them, then reinject below so no keystroke is lost
       // a session may have OPENED while the render was in flight — re-read it
       // through the accessor so the early-return narrowing above doesn't apply
-      let liveEdit: { value: string; caret: number } | null = null
+      let liveEdit: LiveEdit | null = null
       const midFlightSession = this.activeInPlaceSession()
       const editingLabel = midFlightSession?.label
       if (midFlightSession && editingLabel?.isConnected) {
-        // Snapshot the label's raw innerHTML (DOM-faithful, no trim, no
-        // `&nbsp;` canonicalisation) so `resumeInPlaceSession` below can
-        // reinject exactly what was on screen. Using `readLabelHtml` here
-        // would strip a just-typed trailing space out of the snapshot.
-        liveEdit = { value: readLabelSnapshot(editingLabel), caret: caretOffsetWithin(editingLabel) }
+        liveEdit = {
+          value: readLabelSnapshot(editingLabel),
+          nodes: [...editingLabel.childNodes],
+          caret: caretOffsetWithin(editingLabel),
+        }
         // a pending live-commit timer closes over the label we are about to
         // detach; the reinjection below reschedules it against the new one
         if (midFlightSession.liveTimer) {
@@ -1418,6 +1415,8 @@ export class MermaidCanvasView {
         entityId,
         labelSelector,
         original: current,
+        originalNodes: [...label.childNodes].map((node) => node.cloneNode(true)),
+        openedOn: label,
         lastCommitted: current,
         caretOffset: -1,
         commitValue,
@@ -1481,8 +1480,13 @@ export class MermaidCanvasView {
         // states. Restore the label DOM directly too — when the reverted code
         // equals the last rendered code, render() short-circuits and would
         // leave the typed text on screen.
-        label.innerHTML = session.original
+        // STOP: never parse session.original as HTML; it is unsanitized diagram source.
+        label.replaceChildren(...session.originalNodes)
         if (session.lastCommitted !== session.original) session.commitValue(session.original)
+        if (label !== session.openedOn) {
+          this.lastRenderedCode = ''
+          this.scheduleRender()
+        }
       }
       // apply any canvas render held back while the session was typing
       if (this.renderHeldByEdit) {
@@ -1527,7 +1531,7 @@ export class MermaidCanvasView {
   }
 
   /** re-attach a live in-place editing session after a render replaced the DOM */
-  private resumeInPlaceSession(liveEdit?: { value: string; caret: number } | null) {
+  private resumeInPlaceSession(liveEdit?: LiveEdit | null) {
     const session = this.inPlaceSession
     if (!session) return
     if (!this.editor.entityExists(session.entityId)) {
@@ -1554,7 +1558,7 @@ export class MermaidCanvasView {
       liveEdit.value !== session.lastCommitted &&
       liveEdit.value !== readLabelSnapshot(label)
     ) {
-      label.innerHTML = liveEdit.value
+      label.replaceChildren(...liveEdit.nodes)
       // run the carried-over delta through the normal live-commit debounce
       label.dispatchEvent(new Event('input'))
     }
