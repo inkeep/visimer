@@ -19,7 +19,7 @@ const CODE = 'flowchart TD\n  A[Write a doc] --> B[End]\n'
  * Set `gate` to hold the next render un-resolved — that models the async gap
  * between a live commit and the SVG swap landing.
  */
-function makeFakeMermaid() {
+function makeFakeMermaid(renderLabel: (label: string) => string = (label) => label) {
   let release: (() => void) | null = null
   const fake: MermaidLike & { gate(): void; release(): void } = {
     initialize() {},
@@ -41,7 +41,7 @@ function makeFakeMermaid() {
         ...nodes.map(
           ([, id, label], i) =>
             `<g class="node" id="flowchart-${id}-${i}"><g class="label"><foreignObject width="80" height="24">` +
-            `<div xmlns="http://www.w3.org/1999/xhtml"><span class="nodeLabel"><p>${label}</p></span></div>` +
+            `<div xmlns="http://www.w3.org/1999/xhtml"><span class="nodeLabel"><p>${renderLabel(label)}</p></span></div>` +
             `</foreignObject></g></g>`,
         ),
         '</g>',
@@ -222,6 +222,77 @@ describe('in-place label editing survives the live-commit re-render', () => {
     // the canvas label must revert too — the reverted code can equal the last
     // rendered code, in which case no re-render will repaint it
     expect(labelOf(container, 'node:A').textContent).toBe('Write a doc')
+  })
+
+  it('Escape after an in-flight render swapped the label repaints it from source', async () => {
+    mermaid.gate()
+    editor.dispatch({ type: 'renameNode', id: 'A', label: 'Renamed' })
+    await vi.advanceTimersByTimeAsync(1)
+
+    view.editEntityLabel('node:A')
+    const openedOn = labelOf(container, 'node:A')
+    mermaid.release()
+    for (let i = 0; i < 5; i++) await Promise.resolve()
+    await vi.advanceTimersByTimeAsync(0)
+
+    const swapped = labelOf(container, 'node:A')
+    expect(swapped).not.toBe(openedOn)
+    expect(swapped.getAttribute('contenteditable')).toBe('true')
+    swapped.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await vi.advanceTimersByTimeAsync(500)
+    expect(editor.code).toContain('A[Renamed]')
+    expect(labelOf(container, 'node:A').textContent).toBe('Renamed')
+  })
+})
+
+describe('Escape restores what mermaid rendered, never the raw source label', () => {
+  let editor: MermaidWysiwygEditor
+  let container: HTMLElement
+  let view: MermaidCanvasView
+
+  const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+  beforeEach(async () => {
+    vi.useFakeTimers()
+    editor = new MermaidWysiwygEditor({ code: 'flowchart TD\n  A[<i>raw</i>] --> B[End]\n' })
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    view = new MermaidCanvasView({ editor, container, mermaid: makeFakeMermaid(escapeHtml), debounceMs: 0 })
+    await view.render()
+  })
+
+  afterEach(() => {
+    view.destroy()
+    container.remove()
+    vi.useRealTimers()
+  })
+
+  it('cancelling an untouched edit does not parse the source label as HTML', async () => {
+    view.editEntityLabel('node:A')
+    const label = labelOf(container, 'node:A')
+    label.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    expect(label.querySelector('i')).toBeNull()
+
+    await vi.advanceTimersByTimeAsync(500)
+    expect(labelOf(container, 'node:A')).toBe(label)
+    expect(label.querySelector('i')).toBeNull()
+    expect(label.textContent).toBe('<i>raw</i>')
+  })
+
+  it('cancelling after a live commit does not parse the source label as HTML', async () => {
+    view.editEntityLabel('node:A')
+    typeInto(labelOf(container, 'node:A'), 'Half typed')
+    await vi.advanceTimersByTimeAsync(500)
+    expect(editor.code).toContain('A[Half typed]')
+
+    const label = labelOf(container, 'node:A')
+    label.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    expect(label.querySelector('i')).toBeNull()
+    expect(label.textContent).toBe('<i>raw</i>')
+
+    await vi.advanceTimersByTimeAsync(500)
+    expect(editor.code).toContain('<i>raw</i>')
+    expect(editor.code).not.toContain('Half typed')
   })
 })
 
