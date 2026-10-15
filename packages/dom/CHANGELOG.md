@@ -1,5 +1,12 @@
 # @visimer/dom
 
+## 1.1.3
+
+### Patch Changes
+
+- ca5cd66: Cancelling an in-place label edit with Escape now restores the label exactly as mermaid rendered it. Before, the canvas parsed the raw label text from the diagram source as HTML, which skipped mermaid's sanitizer. If your canvas renders diagrams that you did not write, upgrade.
+  - @visimer/core@1.1.3
+
 ## 1.1.2
 
 ### Patch Changes
