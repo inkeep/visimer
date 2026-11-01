@@ -7,11 +7,21 @@ import {
   type ParticipantType,
   type ShapeId,
 } from '@visimer/core'
-import type { MermaidCanvasView, Tool } from '@visimer/dom'
+import * as pele from 'pele'
+import { peleAdapter, type MermaidCanvasView, type Tool } from '@visimer/dom'
 import { MermaidCanvas, useMermaidEditor } from '@visimer/react'
 import { MermaidCodeMirror } from '@visimer/codemirror'
 import { MonacoPane } from './MonacoPane'
 import { SAMPLES } from '../../js-playground/src/samples'
+
+/**
+ * Pele is stateless, so one adapter serves every canvas — built once at module
+ * scope instead of per-render, keeping the `renderer` prop identity stable (the
+ * canvas re-creates its view when props it was constructed with change).
+ */
+const peleRenderer = peleAdapter(pele, {
+  fontFamily: '"Inter Variable", "Inter", ui-sans-serif, system-ui, sans-serif',
+})
 
 let zenumlReady: Promise<boolean> | null = null
 function ensureZenuml(): Promise<boolean> {
@@ -142,6 +152,13 @@ export default function App() {
   const [theme, setTheme] = useState('ink')
   const [readOnly, setReadOnly] = useState(false)
   const [zenumlOk, setZenumlOk] = useState(false)
+  const [renderer, setRenderer] = useState<'mermaid' | 'pele'>(() =>
+    localStorage.getItem('visimer.renderer') === 'pele' ? 'pele' : 'mermaid',
+  )
+
+  useEffect(() => {
+    localStorage.setItem('visimer.renderer', renderer)
+  }, [renderer])
 
   const sample = SAMPLES[sampleIndex]
   useEffect(() => {
@@ -160,6 +177,10 @@ export default function App() {
           <span className="sub">playground</span>
         </div>
         <div className="controls">
+          <div className="seg" role="group" aria-label="Renderer">
+            <button className={renderer === 'mermaid' ? 'on' : ''} onClick={() => setRenderer('mermaid')}>Mermaid</button>
+            <button className={renderer === 'pele' ? 'on' : ''} onClick={() => setRenderer('pele')}>Pele</button>
+          </div>
           <select value={theme} onChange={(e) => setTheme(e.target.value)} title="Mermaid theme">
             {['ink', 'dark', 'default', 'forest', 'neutral'].map((t) => (
               <option key={t} value={t}>{t}</option>
@@ -189,13 +210,13 @@ export default function App() {
             <span><i className="dot render" /> render</span>
           </div>
         </aside>
-        {!waitForZenuml && <Workspace key={sampleIndex} code={sample.code} theme={theme} readOnly={readOnly} />}
+        {!waitForZenuml && <Workspace key={sampleIndex} code={sample.code} theme={theme} readOnly={readOnly} renderer={renderer} />}
       </div>
     </div>
   )
 }
 
-function Workspace({ code, theme, readOnly }: { code: string; theme: string; readOnly: boolean }) {
+function Workspace({ code, theme, readOnly, renderer }: { code: string; theme: string; readOnly: boolean; renderer: 'mermaid' | 'pele' }) {
   const { editor } = useMermaidEditor(code)
   const [view, setView] = useState<MermaidCanvasView | null>(null)
   const [tool, setToolState] = useState<Tool>('select')
@@ -234,10 +255,17 @@ function Workspace({ code, theme, readOnly }: { code: string; theme: string; rea
           <button disabled={!editor.canUndo} onClick={() => editor.undo()}>Undo</button>
           <button disabled={!editor.canRedo} onClick={() => editor.redo()}>Redo</button>
         </div>
+        {renderer === 'pele' && (
+          <div className="notice" role="note">
+            <strong>Pele</strong> renders flowcharts only as far as editing goes: flowcharts are
+            editable, every other diagram type renders view-only, and zenuml is unsupported.
+          </div>
+        )}
         <MermaidCanvas
           editor={editor}
-          mermaid={mermaid}
-          mermaidConfig={{ securityLevel: 'loose', ...themeConfig(theme) }}
+          mermaid={renderer === 'mermaid' ? mermaid : undefined}
+          renderer={renderer === 'pele' ? peleRenderer : undefined}
+          mermaidConfig={renderer === 'mermaid' ? { securityLevel: 'loose', ...themeConfig(theme) } : undefined}
           accentColor="#69a3ff"
           readOnly={readOnly}
           onReady={setView}

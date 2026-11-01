@@ -99,6 +99,9 @@ importers:
       monaco-editor:
         specifier: ^0.55.1
         version: 0.55.1
+      pele:
+        specifier: ^1.13.0
+        version: 1.13.0
       react:
         specifier: ^18.3.1
         version: 18.3.1
