@@ -847,7 +847,10 @@ export class MermaidCanvasView {
       if (this.svg) {
         if (this.panZoomEnabled) this.prepareSvgForPanZoom()
         else this.svg.style.maxWidth = '100%'
-        injectAnimationKeyframes(this.svg)
+        // pele's style allowlist silently drops `animation-*` declarations, so
+        // its edges can never run the vsmr-flow dash animation — injecting the
+        // keyframes would pretend otherwise. Mermaid honors them.
+        if (this.renderer.id !== 'pele') injectAnimationKeyframes(this.svg)
         this.bindSvg()
       }
       this.editor.setDiagnostics([])
@@ -1985,6 +1988,29 @@ export class MermaidCanvasView {
       ]
       const currentCurve = readFlowCurve(this.editor.code)
       const currentAnim = readEdgeAnimation(this.editor.code, edge.order)
+      // pele's style allowlist silently drops `animation-*` declarations, so
+      // an animated edge would render as a plain solid line while the source
+      // claims animation — a silent no-op the spec forbids. The picker is
+      // offered only where the renderer can honor it.
+      const animate: PopoverAction = {
+        icon: ICONS.circlePlay,
+        title: 'Animate edge',
+        panel: {
+          title: 'Animate edge',
+          sections: [
+            {
+              columns: 3,
+              items: anims.map((a) => ({
+                svg: a.svg,
+                title: a.t,
+                label: a.label,
+                selected: currentAnim === a.v,
+                onClick: () => this.editor.dispatch({ type: 'setEdgeAnimation', edgeId: id, value: a.v }),
+              })),
+            },
+          ],
+        },
+      }
       return [
         {
           icon: ICONS.arrowRight,
@@ -2037,25 +2063,7 @@ export class MermaidCanvasView {
             sections: [this.colorSection('Stroke', (value) => this.editor.dispatch({ type: 'setEdgeColor', edgeId: id, value }))],
           },
         },
-        {
-          icon: ICONS.circlePlay,
-          title: 'Animate edge',
-          panel: {
-            title: 'Animate edge',
-            sections: [
-              {
-                columns: 3,
-                items: anims.map((a) => ({
-                  svg: a.svg,
-                  title: a.t,
-                  label: a.label,
-                  selected: currentAnim === a.v,
-                  onClick: () => this.editor.dispatch({ type: 'setEdgeAnimation', edgeId: id, value: a.v }),
-                })),
-              },
-            ],
-          },
-        },
+        ...(this.renderer.id === 'pele' ? [] : [animate]),
         {
           icon: ICONS.spline,
           title: 'Edge curve (diagram-wide)',
