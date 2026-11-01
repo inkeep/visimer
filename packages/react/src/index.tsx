@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import { MermaidWysiwygEditor } from '@visimer/core'
-import { MermaidCanvasView, type MermaidLike, type Tool, type ViewHooks } from '@visimer/dom'
+import { MermaidCanvasView, type MermaidLike, type RendererAdapter, type Tool, type ViewHooks } from '@visimer/dom'
 
 export { MermaidWysiwygEditor } from '@visimer/core'
 export { MermaidCanvasView } from '@visimer/dom'
@@ -27,7 +27,9 @@ export interface MermaidWysiwygProps {
   code: string
   onCodeChange?: (code: string) => void
   /** your mermaid instance (`import mermaid from 'mermaid'`) */
-  mermaid: MermaidLike
+  mermaid?: MermaidLike
+  /** alternate renderer (e.g. `peleAdapter(pele)`); pass exactly one of `mermaid`/`renderer` */
+  renderer?: RendererAdapter
   /** passed to `mermaid.initialize` (theme, curves, securityLevel, …) */
   mermaidConfig?: Record<string, unknown>
   accentColor?: string
@@ -52,7 +54,7 @@ export interface MermaidWysiwygProps {
  * ```
  */
 export function MermaidWysiwyg(props: MermaidWysiwygProps) {
-  const { code, onCodeChange, mermaid, mermaidConfig, accentColor, readOnly, panZoom, tool, hooks, onSelectionChange, onReady, className, style } = props
+  const { code, onCodeChange, mermaid, renderer, mermaidConfig, accentColor, readOnly, panZoom, tool, hooks, onSelectionChange, onReady, className, style } = props
   const hostRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<MermaidWysiwygEditor | null>(null)
   const viewRef = useRef<MermaidCanvasView | null>(null)
@@ -68,6 +70,7 @@ export function MermaidWysiwyg(props: MermaidWysiwygProps) {
       editor,
       container: hostRef.current,
       mermaid,
+      renderer,
       mermaidConfig,
       accentColor,
       readOnly,
@@ -92,7 +95,7 @@ export function MermaidWysiwyg(props: MermaidWysiwygProps) {
     }
     // the view is created once; prop updates are applied by the effects below
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mermaid])
+  }, [mermaid, renderer])
 
   useEffect(() => {
     const editor = editorRef.current
@@ -112,9 +115,9 @@ export function MermaidWysiwyg(props: MermaidWysiwygProps) {
   }, [accentColor])
 
   useEffect(() => {
-    if (mermaidConfig) viewRef.current?.setMermaidConfig(mermaidConfig)
+    if (!renderer && mermaidConfig) viewRef.current?.setMermaidConfig(mermaidConfig)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(mermaidConfig)])
+  }, [JSON.stringify(mermaidConfig), renderer])
 
   useEffect(() => {
     viewRef.current?.setHooks(hooks ?? {})
@@ -126,7 +129,9 @@ export function MermaidWysiwyg(props: MermaidWysiwygProps) {
 export interface MermaidCanvasProps {
   /** an editor you own (e.g. from `useMermaidEditor`) */
   editor: MermaidWysiwygEditor
-  mermaid: MermaidLike
+  mermaid?: MermaidLike
+  /** alternate renderer (e.g. `peleAdapter(pele)`); pass exactly one of `mermaid`/`renderer` */
+  renderer?: RendererAdapter
   mermaidConfig?: Record<string, unknown>
   accentColor?: string
   readOnly?: boolean
@@ -140,7 +145,7 @@ export interface MermaidCanvasProps {
 
 /** Canvas-only binding for an editor instance you manage yourself. */
 export function MermaidCanvas(props: MermaidCanvasProps) {
-  const { editor, mermaid, mermaidConfig, accentColor, readOnly, panZoom, hooks, onReady, className, style } = props
+  const { editor, mermaid, renderer, mermaidConfig, accentColor, readOnly, panZoom, hooks, onReady, className, style } = props
   const hostRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<MermaidCanvasView | null>(null)
 
@@ -150,6 +155,7 @@ export function MermaidCanvas(props: MermaidCanvasProps) {
       editor,
       container: hostRef.current,
       mermaid,
+      renderer,
       mermaidConfig,
       accentColor,
       readOnly,
@@ -163,7 +169,7 @@ export function MermaidCanvas(props: MermaidCanvasProps) {
       viewRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editor, mermaid])
+  }, [editor, mermaid, renderer])
 
   useEffect(() => {
     viewRef.current?.setHooks(hooks ?? {})
@@ -178,9 +184,9 @@ export function MermaidCanvas(props: MermaidCanvasProps) {
   }, [accentColor])
 
   useEffect(() => {
-    if (mermaidConfig) viewRef.current?.setMermaidConfig(mermaidConfig)
+    if (!renderer && mermaidConfig) viewRef.current?.setMermaidConfig(mermaidConfig)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(mermaidConfig)])
+  }, [JSON.stringify(mermaidConfig), renderer])
 
   return <div ref={hostRef} className={className} style={{ minHeight: 240, ...style }} />
 }
