@@ -36,6 +36,7 @@ import { mermaidAdapter, type RendererAdapter } from './renderer'
 import { correlatePeleFlowchart } from './correlate.pele'
 import { correlatePeleClass } from './correlate.pele.class'
 import { correlatePeleState } from './correlate.pele.state'
+import { correlatePeleEr } from './correlate.pele.er'
 
 /** default swatches offered in the color panels (works on light and dark themes) */
 export const COLOR_PALETTE = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#6366f1', '#d946ef', '#64748b']
@@ -919,7 +920,7 @@ export class MermaidCanvasView {
     if (!svg) return
     const { flowchart, sequence, state, classGraph, er } = this.editor.result
     const isPele = this.renderer.id === 'pele'
-    // Under pele, flowcharts, state and class diagrams correlate through
+    // Under pele, flowcharts, state, class and er diagrams correlate through
     // their own modules; every other diagram slot stays view-only, and
     // sequence correlation plus the visibility retry are mermaid-only.
     if (isPele) {
@@ -929,7 +930,9 @@ export class MermaidCanvasView {
           ? correlatePeleState(svg, state)
           : classGraph
             ? correlatePeleClass(svg, classGraph)
-            : null
+            : er
+              ? correlatePeleEr(svg, er)
+              : null
     } else {
       this.correlation = flowchart
         ? correlateFlowchart(svg, flowchart)

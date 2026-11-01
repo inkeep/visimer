@@ -4,4 +4,5 @@ export { correlateFlowchart, correlateSequence, type Correlation, type SequenceC
 export { correlatePeleFlowchart } from './correlate.pele'
 export { correlatePeleClass } from './correlate.pele.class'
 export { correlatePeleState } from './correlate.pele.state'
+export { correlatePeleEr } from './correlate.pele.er'
 export { Popover, type PopoverAction, type PopoverPanelItem } from './popover'
