@@ -96,6 +96,23 @@ Facts from the Pele v1.13.0 source audit that shape the design:
   the same id scheme.
 - Node/cluster data-ids are source ids (stable); edge data-ids are
   count-based (unstable when a duplicate edge is inserted).
+- **Pele does not render invisible (`~~~`) edges at all** (the
+  `g.pele-edge` group is gated on `thickness !== 'invisible'`; a labeled
+  invisible edge still gets its `g.pele-edge-label`). Mermaid renders
+  invisible edges as real clickable paths, so under pele they are
+  genuinely view-only — and a naive order-match would pair the wrong core
+  edge with a rendered path (mis-correlation that edits the wrong line).
+- **Pele filters style declarations through a fixed allowlist**
+  (`SHAPE_PROPS`/`TEXT_PROPS`, src/svg/theme.ts): `animation-*`
+  declarations are silently dropped, so the edge-animation popover action
+  is a silent no-op under pele.
+- **Subgraph titles crossed by edges are drawn outside their cluster**,
+  in a top-level `g.pele-cluster-titles` as
+  `g.pele-cluster-title[data-id="<id>"]`.
+- **Core cannot parse edge-id syntax today** (`A e1@--> B` fails at `e1@`
+  and the line degrades to unknown, for both renderers equally) — so edge
+  `@id` matching is not implementable without a core parse change, which
+  the non-goals exclude. Pre-existing limitation, out of PoC scope.
 - Labels are plain SVG `<text class="pele-label">` — no foreignObject
   HTML. The view's `editInPlace` already returns false when no HTMLElement
   label is found and falls back to the overlay editor (view.ts:1403) — no
@@ -193,14 +210,25 @@ and gestures work untouched. Strategy: **data-id first, degrade on miss**
   with the same rules before matching (port them into the correlator;
   verify against src/diagrams/flowchart/render.ts:220).
 - Clusters/subgraphs: `g.pele-cluster[data-id="<id>"]`, with
-  `.pele-cluster-label` for the label.
-- Edges: core knows (source, target) and declaration order per pair.
-  Match by user `@id` (`data-id` exact) when present; else group
-  `g.pele-edge[data-id^="L_<src>_<tgt>"]` in DOM order against core's
-  per-pair declaration order. Never trust count-based ids globally.
-- Edge labels: `g.pele-edge-label[data-id="<same edge id>"]`.
+  `.pele-cluster-label` for the label. Struck titles in
+  `g.pele-cluster-titles` (`g.pele-cluster-title[data-id="<id>"]`) also
+  correlate to the subgraph entity, so crossed titles stay clickable and
+  renamable.
+- Edges: core knows (source, target) and declaration order per pair;
+  pele never exposes user edge-ids core could use (core can't parse
+  `@id` syntax — see constraints). Match **per (source, target) pair,
+  count-checked**: group `g.pele-edge[data-id^="L_<src>_<tgt>"]` in DOM
+  order against core's per-pair declaration order — but only when the
+  pair's rendered count equals the core count. If pele rendered fewer
+  elements than core has edges for a pair (e.g. invisible `~~~` edges,
+  which pele does not render), degrade that pair to `failed` rather than
+  blind-order-match: a mis-paired edge would edit or delete the wrong
+  source line, the worst failure mode for an editor. Invisible edges are
+  accepted as view-only under pele.
+- Edge labels: `g.pele-edge-label[data-id="<same edge id>"]`, with the
+  same per-pair count check.
 - Everything unmatched lands in `failed` → view-only, same philosophy as
-  today.
+  today. Degrade, never mis-correlate.
 
 ### 3. Editing UX over pele (mostly free)
 
@@ -210,6 +238,13 @@ and gestures work untouched. Strategy: **data-id first, degrade on miss**
   overlay-editor UX.
 - Drag-to-connect ghost, add-node, delete, popovers, selection styles,
   hit-walking (`data-mw-entity`) — renderer-agnostic already.
+- **One popover action is gated under pele**: the edge-animation picker
+  emits `linkStyle N animation-*`, which pele's style allowlist silently
+  drops — so under `renderer.id === 'pele'` the animation action is
+  hidden and `injectAnimationKeyframes` is skipped. Silent feature loss
+  is this codebase's documented highest-risk failure mode
+  (TESTING.md:17); gate it instead. Node colors, shapes, arrows,
+  thickness, and curve all round-trip under pele and stay enabled.
 - `addEdgeHitOverlay` clones visible `<path>` elements; pele edges are
   `<path>` children of `g.pele-edge` (stroke set on the group). Verify
   stroke inheritance produces a sane 14px hit overlay; if not, have the
@@ -240,10 +275,12 @@ and gestures work untouched. Strategy: **data-id first, degrade on miss**
 
 - `packages/dom/test/correlate-pele.test.ts` — the big win: jsdom + real
   `pele.render()` output (metrics fallback makes it deterministic in
-  Node). Fixtures: standard flowchart, subgraphs, `@id` edges, duplicate
-  A→B edges, special-char ids, multi-line labels. Assert every entity
-  correlates to the right element; assert `failed` on a synthetic id
-  mismatch.
+  Node). Fixtures: standard flowchart, subgraphs (including a title
+  struck by an edge), duplicate A→B edges, invisible `~~~` edges
+  (asserting degradation, not mis-pairing), special-char ids, and
+  multi-line labels. Assert every entity correlates to the right
+  element; assert `failed` on a synthetic id mismatch and on
+  count-mismatched pairs.
 - `packages/dom/test/renderer.test.ts` — adapter contracts:
   `mermaidAdapter` preserves the call sequence (initialize before every
   render); `peleAdapter` maps `PeleError` → diagnostic; view over a fake
@@ -265,9 +302,13 @@ and gestures work untouched. Strategy: **data-id first, degrade on miss**
 
 - Exact pele id-escape normalization (port `escText` rules; verify
   special-char ids)
-- Edge per-pair DOM-order matching details (document order of
-  `L_src_tgt_*` groups vs core declaration order)
+- Verify pele emits a pair's `L_src_tgt_*` groups in declaration order
+  (the count-checked order-match assumes it)
+- Store the inner `<path>`, not the `g.pele-edge` group, in
+  `Correlation.edges` — the overlay editor's `SVGPathElement` midpoint
+  branch and the hover-CSS sibling rule depend on it
 - Whether `addEdgeHitOverlay` needs an effective-stroke fix for pele's
   group-level stroke
 - Pele CSS-variable theme values for the playground (eyeball-match INK)
-- zenuml/non-flowchart picker behavior details under pele
+- Memoize the adapter in the playground so the view isn't recreated per
+  React render; zenuml/non-flowchart picker behavior details under pele
