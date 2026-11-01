@@ -32,7 +32,7 @@ import { decodeEntities } from './correlate.pele'
  * `getBoundingClientRect` is zero, so the view's visibility retry contract
  * (empty lifelines ⇒ re-correlate on reveal) stays intact.
  *
- * Scenery core has no entity for is never tagged: `rect.pele-activation`
+ * Scenery (which core has no entity for) is never tagged: `rect.pele-activation`
  * (which shares the participant's data-id!), destroy marks and `g.pele-frame`
  * fragments — clicking them selects nothing.
  */

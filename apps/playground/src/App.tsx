@@ -257,8 +257,9 @@ function Workspace({ code, theme, readOnly, renderer }: { code: string; theme: s
         </div>
         {renderer === 'pele' && (
           <div className="notice" role="note">
-            <strong>Pele</strong> renders flowcharts only as far as editing goes: flowcharts are
-            editable, every other diagram type renders view-only, and zenuml is unsupported.
+            <strong>Pele</strong> renderer: every editable diagram type renders here and is
+            editable, except zenuml (external plugin — Pele restriction). A few legacy
+            correlator gaps stay view-only (some gitgraph/architecture/c4 items).
           </div>
         )}
         <MermaidCanvas
