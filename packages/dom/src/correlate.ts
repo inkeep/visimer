@@ -29,7 +29,7 @@ function esc(s: string): string {
  * overlay is painted BEFORE the visible path so the arrow head, cross, or
  * dot still visually wins overlap, and it inherits the same paint transform.
  */
-function addEdgeHitOverlay(path: SVGElement, entityId: string): void {
+export function addEdgeHitOverlay(path: SVGElement, entityId: string): void {
   const doc = path.ownerDocument
   if (!doc || path.hasAttribute('data-mw-hit-overlay')) return
   const parent = path.parentNode
