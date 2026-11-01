@@ -2,5 +2,6 @@ export { MermaidCanvasView, type ViewOptions, type ViewHooks, type Tool, type Me
 export { mermaidAdapter, peleAdapter, type RendererAdapter, type PeleLike } from './renderer'
 export { correlateFlowchart, correlateSequence, type Correlation, type SequenceCorrelation } from './correlate'
 export { correlatePeleFlowchart } from './correlate.pele'
+export { correlatePeleClass } from './correlate.pele.class'
 export { correlatePeleState } from './correlate.pele.state'
 export { Popover, type PopoverAction, type PopoverPanelItem } from './popover'

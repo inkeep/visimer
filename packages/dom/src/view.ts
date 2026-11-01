@@ -34,6 +34,7 @@ import {
 import { ICONS } from './icons'
 import { mermaidAdapter, type RendererAdapter } from './renderer'
 import { correlatePeleFlowchart } from './correlate.pele'
+import { correlatePeleClass } from './correlate.pele.class'
 import { correlatePeleState } from './correlate.pele.state'
 
 /** default swatches offered in the color panels (works on light and dark themes) */
@@ -918,15 +919,17 @@ export class MermaidCanvasView {
     if (!svg) return
     const { flowchart, sequence, state, classGraph, er } = this.editor.result
     const isPele = this.renderer.id === 'pele'
-    // Under pele, flowcharts and state diagrams correlate through their own
-    // modules; every other diagram slot stays view-only, and sequence
-    // correlation plus the visibility retry are mermaid-only.
+    // Under pele, flowcharts, state and class diagrams correlate through
+    // their own modules; every other diagram slot stays view-only, and
+    // sequence correlation plus the visibility retry are mermaid-only.
     if (isPele) {
       this.correlation = flowchart
         ? correlatePeleFlowchart(svg, flowchart)
         : state
           ? correlatePeleState(svg, state)
-          : null
+          : classGraph
+            ? correlatePeleClass(svg, classGraph)
+            : null
     } else {
       this.correlation = flowchart
         ? correlateFlowchart(svg, flowchart)
@@ -1111,7 +1114,7 @@ export class MermaidCanvasView {
       if (member) {
         e.preventDefault()
         this.popover.hide()
-        this.editInPlace(
+        const committed = this.editInPlace(
           `member:${clsId}:${lineIndex}`,
           memberEl,
           '.nodeLabel',
@@ -1119,6 +1122,16 @@ export class MermaidCanvasView {
           (v) => this.editor.dispatch({ type: 'cl.setMemberText', id: clsId, memberLine: lineIndex, text: v }, 'canvas'),
           { live: false },
         )
+        // pele renders member rows as SVG <text> — no HTML `.nodeLabel` for
+        // the in-place session to attach to, so editInPlace returns false and
+        // the edit must not silently no-op. Route to the overlay editor with
+        // the same commit op. Fires only where editInPlace already returned
+        // false; mermaid's HTML-label path is untouched.
+        if (!committed) {
+          this.openOverlayEditor(memberEl, member.text, (v) =>
+            this.editor.dispatch({ type: 'cl.setMemberText', id: clsId, memberLine: lineIndex, text: v }, 'canvas'),
+          )
+        }
         return
       }
     }
