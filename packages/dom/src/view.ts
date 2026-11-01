@@ -37,6 +37,7 @@ import { correlatePeleFlowchart } from './correlate.pele'
 import { correlatePeleClass } from './correlate.pele.class'
 import { correlatePeleState } from './correlate.pele.state'
 import { correlatePeleEr } from './correlate.pele.er'
+import { correlatePelePie } from './correlate.pele.pie'
 
 /** default swatches offered in the color panels (works on light and dark themes) */
 export const COLOR_PALETTE = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#6366f1', '#d946ef', '#64748b']
@@ -918,11 +919,11 @@ export class MermaidCanvasView {
   private bindSvg() {
     const svg = this.svg
     if (!svg) return
-    const { flowchart, sequence, state, classGraph, er } = this.editor.result
+    const { flowchart, sequence, state, classGraph, er, pie } = this.editor.result
     const isPele = this.renderer.id === 'pele'
-    // Under pele, flowcharts, state, class and er diagrams correlate through
-    // their own modules; every other diagram slot stays view-only, and
-    // sequence correlation plus the visibility retry are mermaid-only.
+    // Under pele, flowcharts, state, class, er and pie diagrams correlate
+    // through their own modules; every other diagram slot stays view-only,
+    // and sequence correlation plus the visibility retry are mermaid-only.
     if (isPele) {
       this.correlation = flowchart
         ? correlatePeleFlowchart(svg, flowchart)
@@ -932,7 +933,9 @@ export class MermaidCanvasView {
             ? correlatePeleClass(svg, classGraph)
             : er
               ? correlatePeleEr(svg, er)
-              : null
+              : pie
+                ? correlatePelePie(svg, pie)
+                : null
     } else {
       this.correlation = flowchart
         ? correlateFlowchart(svg, flowchart)
@@ -942,8 +945,8 @@ export class MermaidCanvasView {
             ? correlateClass(svg, classGraph)
             : er
               ? correlateEr(svg, er)
-              : this.editor.result.pie
-                ? correlatePie(svg, this.editor.result.pie)
+              : pie
+                ? correlatePie(svg, pie)
                 : this.editor.result.gantt
                   ? correlateGantt(svg, this.editor.result.gantt)
                   : this.editor.result.lineItems
