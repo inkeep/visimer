@@ -11,12 +11,13 @@ export interface RendererAdapter {
 }
 
 /**
- * Structural view of Pele's `render`/`parse`, declared with method syntax so
- * an implementation's narrower parameters stay assignable. This package never
- * imports pele; the tests wrap the real module.
+ * Structural view of Pele's `render`/`parse`. Method syntax keeps parameter
+ * checking bivariant, so the real `pele` module — whose `render` accepts a
+ * wider source union and its own options type — is assignable without this
+ * package importing pele.
  */
 export interface PeleLike {
-  render(source: string, options?: Record<string, unknown>): { svg: string; [key: string]: unknown }
+  render(source: string, options?: Record<string, unknown>): { svg: string }
   parse?(text: string): unknown
 }
 

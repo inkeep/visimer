@@ -121,9 +121,7 @@ describe('peleAdapter', () => {
   })
 
   it('renders a real flowchart through pele', async () => {
-    // pele's RenderResult is an interface, so it has no implicit index
-    // signature; spread it to satisfy PeleLike's `[key: string]: unknown`.
-    const peleLike: PeleLike = { render: (src, options) => ({ ...peleRender(src, options) }) }
+    const peleLike: PeleLike = { render: (src, options) => peleRender(src, options) }
     const { svg } = await peleAdapter(peleLike).render('flowchart LR\n  A --> B')
     expect(svg).toContain('class="pele-node')
     expect(svg).toContain('data-id="A"')
