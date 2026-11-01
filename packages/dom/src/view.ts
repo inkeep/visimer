@@ -32,6 +32,7 @@ import {
   type PopoverPanelSection,
 } from './popover'
 import { ICONS } from './icons'
+import { mermaidAdapter, type RendererAdapter } from './renderer'
 
 /** default swatches offered in the color panels (works on light and dark themes) */
 export const COLOR_PALETTE = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#6366f1', '#d946ef', '#64748b']
@@ -155,8 +156,11 @@ export interface ViewHooks {
 export interface ViewOptions {
   editor: MermaidWysiwygEditor
   container: HTMLElement
-  mermaid: MermaidLike
-  /** merged into mermaid.initialize; e.g. { theme: 'dark' } */
+  /** mermaid instance to drive when no `renderer` is given (either one, exactly, is required) */
+  mermaid?: MermaidLike
+  /** renderer driving the canvas (e.g. `mermaidAdapter(...)` or `peleAdapter(...)`); exactly one of `mermaid`/`renderer` is required */
+  renderer?: RendererAdapter
+  /** merged into mermaid.initialize; e.g. { theme: 'dark' } (only used under the mermaid path) */
   mermaidConfig?: Record<string, unknown>
   debounceMs?: number
   readOnly?: boolean
@@ -237,8 +241,6 @@ const BASE_CSS = `
 `
 
 let styleInjected = false
-/** global counter so concurrent views never collide on mermaid's DOM ids */
-let renderIdCounter = 0
 
 /**
  * Read the in-place editor's label back to the string form the mermaid source
@@ -329,8 +331,12 @@ function placeCaretAt(root: HTMLElement, offset: number) {
 export class MermaidCanvasView {
   readonly editor: MermaidWysiwygEditor
   readonly container: HTMLElement
-  private mermaid: MermaidLike
+  private renderer: RendererAdapter
+  /** kept so setMermaidConfig can rebuild the mermaid adapter under new config */
+  private mermaidInstance: MermaidLike | null
   private mermaidConfig: Record<string, unknown>
+  /** setMermaidConfig warned under a custom renderer already; one notice is enough */
+  private setConfigWarned = false
   private svgHost: HTMLElement
   private overlayHost: HTMLElement
   private errorBadge: HTMLElement
@@ -417,15 +423,23 @@ export class MermaidCanvasView {
   private destroyed = false
 
   constructor(options: ViewOptions) {
+    if ((options.mermaid ? 1 : 0) + (options.renderer ? 1 : 0) !== 1) {
+      throw new Error('MermaidCanvasView: pass exactly one of `mermaid` or `renderer`')
+    }
     this.editor = options.editor
     this.container = options.container
-    this.mermaid = options.mermaid
+    this.mermaidInstance = options.mermaid ?? null
     this.readOnly = options.readOnly ?? false
     this.panZoomEnabled = options.panZoom ?? false
     this.debounceMs = options.debounceMs ?? 200
     this.defaultEdge = options.defaultEdge ?? {}
     this.hooks = options.hooks ?? {}
     this.mermaidConfig = { startOnLoad: false, ...options.mermaidConfig }
+    // mermaid.initialize writes a module-global config, so with more than one
+    // canvas on a page the last one to mount owns it and every other canvas
+    // renders with the wrong theme and layout — the adapter re-asserts ours
+    // before every render rather than trusting creation time
+    this.renderer = options.renderer ?? mermaidAdapter(options.mermaid!, this.mermaidConfig)
 
     if (!styleInjected) {
       const style = document.createElement('style')
@@ -448,8 +462,6 @@ export class MermaidCanvasView {
     this.errorBadge.style.display = 'none'
     this.container.append(this.svgHost, this.overlayHost, this.errorBadge)
     this.popover = new Popover(this.overlayHost)
-
-    this.mermaid.initialize(this.mermaidConfig)
 
     this.disposers.push(
       this.editor.on('change', () => this.scheduleRender()),
@@ -527,8 +539,18 @@ export class MermaidCanvasView {
 
   /** Re-initialize mermaid with new config (e.g. theme) and re-render. */
   setMermaidConfig(config: Record<string, unknown>) {
+    // a custom renderer owns its own config — including a caller-built
+    // `mermaidAdapter(...)`, which has no instance here to rebuild under new
+    // config; warn once and leave the render as is
+    if (this.renderer.id !== 'mermaid' || this.mermaidInstance === null) {
+      if (!this.setConfigWarned) {
+        this.setConfigWarned = true
+        console.warn('MermaidCanvasView: setMermaidConfig has no effect under a custom renderer')
+      }
+      return
+    }
     this.mermaidConfig = { ...this.mermaidConfig, ...config }
-    this.mermaid.initialize(this.mermaidConfig)
+    this.renderer = mermaidAdapter(this.mermaidInstance!, this.mermaidConfig)
     this.lastRenderedCode = ''
     void this.render()
   }
@@ -792,14 +814,8 @@ export class MermaidCanvasView {
       return
     }
     const seq = ++this.renderSeq
-    const id = `mw-render-${++renderIdCounter}`
     try {
-      // mermaid.initialize writes a module-global config, so with more than one
-      // canvas on a page the last one to mount owns it and every other canvas
-      // renders with the wrong theme and layout. Re-assert ours here rather than
-      // trusting whatever was initialized in the constructor.
-      this.mermaid.initialize(this.mermaidConfig)
-      const { svg } = await this.mermaid.render(id, code)
+      const { svg } = await this.renderer.render(code)
       if (seq !== this.renderSeq) return // stale
       // an in-place edit may have kept typing since the live commit this render
       // came from — snapshot the label's real text and caret before the swap
@@ -845,14 +861,11 @@ export class MermaidCanvasView {
       }
     } catch (err) {
       if (seq !== this.renderSeq) return
-      // mermaid can leave a temp error element behind
-      document.getElementById(`d${id}`)?.remove()
-      document.getElementById(id)?.remove()
       const message = err instanceof Error ? err.message.split('\n')[0] : String(err)
       this.lastError = message
       this.errorBadge.textContent = `render error: ${message}`
       this.errorBadge.style.display = 'block'
-      const diag: Diagnostic = { message, span: null, severity: 'error', source: 'mermaid' }
+      const diag: Diagnostic = { message, span: null, severity: 'error', source: this.renderer.id }
       this.editor.setDiagnostics([diag])
       this.emit('render', { ok: false, error: message })
     }
@@ -2710,16 +2723,12 @@ export class MermaidCanvasView {
     return this.clientToSvg(rect.left + rect.width / 2, rect.top + rect.height / 2)
   }
 
-  /** Validate code through mermaid.parse and publish diagnostics (does not render). */
+  /** Validate code through the renderer's parse and publish diagnostics (does not render). */
   async validate(): Promise<boolean> {
-    try {
-      await this.mermaid.parse(this.editor.code)
-      return true
-    } catch (err) {
-      const message = err instanceof Error ? err.message.split('\n')[0] : String(err)
-      this.editor.setDiagnostics([{ message, span: null, severity: 'error', source: 'mermaid' }])
-      return false
-    }
+    const d = await this.renderer.validate?.(this.editor.code)
+    if (!d) return true
+    this.editor.setDiagnostics([{ message: d.message, span: null, severity: 'error', source: this.renderer.id }])
+    return false
   }
 
   destroy() {
