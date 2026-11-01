@@ -325,10 +325,10 @@ describe('view dispatch', () => {
   })
 
   it('renders non-flowchart slots view-only under pele', async () => {
-    // gantt has no pele correlator yet — pie does (correlate-pele-pie.test.ts),
-    // so the view-only fallback is pinned with a slot that still lacks one
+    // sequence has no pele correlator (its correlation is mermaid-only) —
+    // the view-only fallback is pinned with a slot that still lacks one
     const editor = new MermaidWysiwygEditor({
-      code: 'gantt\n  dateFormat YYYY-MM-DD\n  section S\n  Task :a1, 2024-01-01, 1d\n',
+      code: 'sequenceDiagram\n  Alice->>Bob: Hi\n',
     })
     const view = new MermaidCanvasView({
       editor,
