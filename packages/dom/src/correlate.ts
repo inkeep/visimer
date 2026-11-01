@@ -464,8 +464,8 @@ export function correlateLineItems(svg: SVGSVGElement, graph: LineItemsGraph): C
 export interface SequenceCorrelation {
   /** participant entity id → every SVG element belonging to it (top + bottom boxes) */
   participants: Map<string, Element[]>
-  /** participant entity id → lifeline <line> element */
-  lifelines: Map<string, SVGLineElement>
+  /** participant entity id → its lifeline element (`<line>` under mermaid, `<path>` under pele) */
+  lifelines: Map<string, SVGGeometryElement>
   /** event entity id → primary element (message line / note rect) */
   events: Map<string, Element>
   /** event entity id → its text element */
@@ -480,7 +480,7 @@ export interface SequenceCorrelation {
  */
 export function correlateSequence(svg: SVGSVGElement, graph: SequenceGraph): SequenceCorrelation {
   const participants = new Map<string, Element[]>()
-  const lifelines = new Map<string, SVGLineElement>()
+  const lifelines = new Map<string, SVGGeometryElement>()
   const events = new Map<string, Element>()
   const eventTexts = new Map<string, Element>()
   const failed: string[] = []

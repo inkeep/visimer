@@ -38,6 +38,7 @@ import { correlatePeleClass } from './correlate.pele.class'
 import { correlatePeleState } from './correlate.pele.state'
 import { correlatePeleEr } from './correlate.pele.er'
 import { correlatePelePie } from './correlate.pele.pie'
+import { correlatePeleSequence } from './correlate.pele.sequence'
 import { correlatePeleGantt } from './correlate.pele.gantt'
 import { correlatePeleLineItems } from './correlate.pele.lineitems'
 
@@ -359,10 +360,11 @@ export class MermaidCanvasView {
   /**
    * Re-runs sequence correlation (not `bindSvg`, which would double-register
    * every pointer/click handler) once a hidden-mount SVG becomes visible.
-   * Sequence correlation matches lifelines by geometry, and
-   * `getBoundingClientRect` returns all zeros for a `display:none` ancestor,
-   * so the initial pass skips lifeline correlation and this observer picks
-   * it up on reveal.
+   * Both correlators skip lifelines under a zero-width svg (mermaid matches
+   * them by geometry outright; pele matches by data-id but keeps the same
+   * hidden-mount contract), and `getBoundingClientRect` returns all zeros
+   * for a `display:none` ancestor, so the initial pass leaves the lifelines
+   * slot empty and this observer picks it up on reveal.
    */
   private visibilityRetryObserver: IntersectionObserver | null = null
   private popoverFollowRaf = 0
@@ -923,10 +925,10 @@ export class MermaidCanvasView {
     if (!svg) return
     const { flowchart, sequence, state, classGraph, er, pie, gantt, lineItems } = this.editor.result
     const isPele = this.renderer.id === 'pele'
-    // Under pele, flowcharts, state, class, er, pie, gantt and the line-item
-    // chart types correlate through their own modules; every other diagram
-    // slot stays view-only, and sequence correlation plus the visibility
-    // retry are mermaid-only.
+    // Under pele, every diagram slot correlates through its own pele module
+    // (flowchart, state, class, er, pie, gantt, line items, and sequence via
+    // correlatePeleSequence — sequence correlation also fills the
+    // seqCorrelation slot and arms the visibility retry like mermaid's).
     if (isPele) {
       this.correlation = flowchart
         ? correlatePeleFlowchart(svg, flowchart)
@@ -960,9 +962,13 @@ export class MermaidCanvasView {
                     ? correlateLineItems(svg, this.editor.result.lineItems)
                     : null
     }
-    this.seqCorrelation = !isPele && sequence ? correlateSequence(svg, sequence) : null
+    this.seqCorrelation = sequence
+      ? isPele
+        ? correlatePeleSequence(svg, sequence)
+        : correlateSequence(svg, sequence)
+      : null
     this.clearLifelineUi()
-    this.armVisibilityRetry(svg, isPele ? null : sequence)
+    this.armVisibilityRetry(svg, sequence, isPele ? correlatePeleSequence : correlateSequence)
 
     svg.addEventListener('click', (e) => this.onSvgClick(e))
     svg.addEventListener('dblclick', (e) => this.onSvgDblClick(e))
@@ -1001,14 +1007,18 @@ export class MermaidCanvasView {
     this.applySelectionStyles()
   }
 
-  private armVisibilityRetry(svg: SVGSVGElement, sequence: SequenceGraph | null): void {
+  private armVisibilityRetry(
+    svg: SVGSVGElement,
+    sequence: SequenceGraph | null,
+    correlate: (svg: SVGSVGElement, graph: SequenceGraph) => SequenceCorrelation = correlateSequence,
+  ): void {
     this.visibilityRetryObserver?.disconnect()
     this.visibilityRetryObserver = null
     if (!sequence) return
     // Key retry off the correlation result: an empty lifelines map is the
-    // hidden-mount case (the same predicate the guard in correlate.ts
-    // enforces). Avoids re-checking bbox with inverted polarity in two
-    // files.
+    // hidden-mount case (the same predicate the correlators enforce —
+    // both mermaid's and pele's leave the slot empty under a zero-width
+    // svg). Avoids re-checking bbox with inverted polarity in two files.
     if (this.seqCorrelation && this.seqCorrelation.lifelines.size > 0) return
     if (typeof IntersectionObserver === 'undefined') return
     this.visibilityRetryObserver = new IntersectionObserver((entries) => {
@@ -1020,8 +1030,9 @@ export class MermaidCanvasView {
       this.visibilityRetryObserver?.disconnect()
       this.visibilityRetryObserver = null
       // Re-run correlation only; bindSvg's addEventListener block would
-      // double-register every pointer/click handler.
-      if (this.svg === svg) this.seqCorrelation = correlateSequence(svg, sequence)
+      // double-register every pointer/click handler. The correlator is
+      // whichever one the current renderer needs (pele under pele).
+      if (this.svg === svg) this.seqCorrelation = correlate(svg, sequence)
     })
     this.visibilityRetryObserver.observe(svg)
   }

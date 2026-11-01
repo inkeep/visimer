@@ -324,9 +324,10 @@ describe('view dispatch', () => {
     expect(container.querySelector('[data-mw-entity="node:A"]')).toBeTruthy()
   })
 
-  it('renders non-flowchart slots view-only under pele', async () => {
-    // sequence has no pele correlator (its correlation is mermaid-only) —
-    // the view-only fallback is pinned with a slot that still lacks one
+  it('dispatches sequence diagrams through the pele sequence correlator', async () => {
+    // sequence used to be the one view-only slot under pele (its correlation
+    // was mermaid-only, pre task-7); now it dispatches through
+    // correlatePeleSequence like every other slot
     const editor = new MermaidWysiwygEditor({
       code: 'sequenceDiagram\n  Alice->>Bob: Hi\n',
     })
@@ -339,6 +340,7 @@ describe('view dispatch', () => {
     views.push(view)
     await flush()
     expect(container.querySelector('svg')).toBeTruthy()
-    expect(container.querySelectorAll('[data-mw-entity]')).toHaveLength(0)
+    expect(container.querySelectorAll('[data-mw-entity="participant:Alice"]')).toHaveLength(2)
+    expect(container.querySelector('[data-mw-entity="event:1"]')).toBeTruthy()
   })
 })
