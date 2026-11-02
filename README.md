@@ -101,7 +101,7 @@ pnpm install && pnpm dev   # playground at http://localhost:5173
 | [block](https://mermaid.js.org/syntax/block.html) | ✅ | ✅ | ❌ |
 | [zenuml](https://mermaid.js.org/syntax/zenuml.html) | ✅ | ❌ | ❌ |
 
-**Item editing** is select, edit in place, add, and delete; **structural editing** adds connect, reorder, and restyle. Every type round-trips losslessly and syncs selection between code and canvas, including view-only zenuml (an external plugin).
+**Item editing** is select, edit in place, add, and delete; **structural editing** adds connect, reorder, and restyle. Every type round-trips losslessly and syncs selection between code and canvas, including view-only zenuml (an external plugin). All editable types also work when rendering through Pele (`peleAdapter` in `@visimer/dom`) — most edit fully there; a few gitgraph/architecture/c4 items remain view-only pending follow-up, and zenuml is Mermaid-only since it is an external plugin.
 
 ## Packages
 
@@ -122,6 +122,7 @@ Some other editor? Implement the adapter, it's about forty lines.
 ## Architecture
 - Leverages the native Mermaid.js renderer for visualizing the Mermaid diagram true to how it’s intended. We just overlay/add point-edit functionality on top.
 - We map the rendered SVG elements back to a Concrete Syntax Tree (CST) representation, which we can then use to edit only the parts of the Mermaid source that need updating (without affecting the rest of the file).
+- The canvas renders through a swappable renderer seam: bring your own `mermaid` instance, or render via Pele by passing a `peleAdapter` (from `@visimer/dom`). Every editable diagram type works under both renderers — under Pele a few gitgraph/architecture/c4 items remain view-only pending follow-up, and zenuml is a Mermaid-only external plugin.
 
 ## Design
 

@@ -99,6 +99,9 @@ importers:
       monaco-editor:
         specifier: ^0.55.1
         version: 0.55.1
+      pele:
+        specifier: ^1.13.0
+        version: 1.13.0
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -229,6 +232,9 @@ importers:
       jsdom:
         specifier: ^25.0.1
         version: 25.0.1
+      pele:
+        specifier: ^1.13.0
+        version: 1.13.0
       typescript:
         specifier: ^5.6.3
         version: 5.9.3
@@ -2289,6 +2295,10 @@ packages:
   pathval@2.0.1:
     resolution: {integrity: sha512-//nshmD55c46FuFw26xV/xFAaB5HF9Xdap7HJBBnrKdAd6/GxDBaNA1870O79+9ueg61cZLSVc+OaFlfmObYVQ==}
     engines: {node: '>= 14.16'}
+
+  pele@1.13.0:
+    resolution: {integrity: sha512-Ie8UKY9x00MsuR3jO6AzUwzK2Z6MIV3Tf4EDdITiuk8Uaz8K7g0R082WqsqNaSU8DdgkrRvZThzhit83mi/uiw==}
+    engines: {node: '>=20'}
 
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
@@ -4765,6 +4775,8 @@ snapshots:
   pathe@2.0.3: {}
 
   pathval@2.0.1: {}
+
+  pele@1.13.0: {}
 
   picocolors@1.1.1: {}
 
