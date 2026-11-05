@@ -9,7 +9,7 @@
     ".": "./src/index.tsx"
   },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json",
+    "typecheck": "node ../../node_modules/@typescript/native/bin/tsc -p tsconfig.json",
     "build": "tsup src/index.tsx --format esm --dts --sourcemap --out-dir dist --external react"
   },
   "dependencies": {
