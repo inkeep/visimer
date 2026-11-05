@@ -16,6 +16,7 @@
     "release": "pnpm build && changeset publish"
   },
   "devDependencies": {
+    "@typescript/native": "npm:typescript@7.0.2",
     "tsup": "^8.5.1",
     "typescript": "^5.6.3",
     "@changesets/cli": "^2.27.10"
