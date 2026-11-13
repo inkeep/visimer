@@ -52,7 +52,8 @@ const EDGE_LABEL = 'renders'
 /** The sr-only h1, which is the diagram read as a sentence — composed rather
  *  than restated so the accessible headline cannot drift from the visible one. */
 export const HERO_HEADLINE = `${NODE_A} ${EDGE_LABEL} ${NODE_B}`
-export const HERO_SUBHEAD = 'Click a node to edit it. Perfect for polishing AI-generated diagrams.'
+export const HERO_SUBHEAD =
+  'Click any node to rename, reshape or connect it, and the Mermaid source rewrites itself. Perfect for polishing AI-generated diagrams.'
 export const HERO_LICENSE = 'MIT'
 export const HERO_HINT_LEAD = 'That headline is a live Mermaid diagram.'
 export const HERO_HINT_BODY = 'Double-click a word to rewrite it.'

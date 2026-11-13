@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { EditorView } from '@codemirror/view'
 import { MermaidCodeMirror } from '@visimer/codemirror'
 import type { MermaidWysiwygEditor } from '@visimer/core'
@@ -6,7 +6,7 @@ import { track } from './analytics'
 
 /** Sample diagrams + chrome shared by the inline demo and /playground. */
 
-export const PRESETS: Record<string, string> = {
+export const PRESETS: Record<PresetKey, string> = {
   flowchart: `flowchart LR
     A[Write a doc] --> B{Needs a diagram?}
     B -->|Yes| C[Click a node to edit]
@@ -51,13 +51,48 @@ export const PRESETS: Record<string, string> = {
     v1.0             :milestone, m1, after a3, 0d`,
 }
 
-export const TYPE_LABELS: Record<string, string> = {
+export const TYPE_LABELS = {
   flowchart: 'Flowchart',
   sequence: 'Sequence',
   class: 'Class',
   state: 'State',
   er: 'ER',
   gantt: 'Gantt',
+} as const
+
+export type PresetKey = keyof typeof TYPE_LABELS
+
+export const PRESET_KEYS = Object.keys(TYPE_LABELS) as PresetKey[]
+
+export function useCopy() {
+  const [copiedKey, setCopiedKey] = useState<string | null>(null)
+  const timer = useRef<number | undefined>(undefined)
+  useEffect(() => () => window.clearTimeout(timer.current), [])
+  const copy = async (text: string, key: string, onCopied?: () => void) => {
+    if (!navigator.clipboard) return
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      return
+    }
+    onCopied?.()
+    setCopiedKey(key)
+    window.clearTimeout(timer.current)
+    timer.current = window.setTimeout(() => setCopiedKey(null), 1400)
+  }
+  return { copiedKey, copy }
+}
+
+export function CopyStatus({ copied }: { copied: boolean }) {
+  return (
+    <span className="sr-only" role="status">
+      {copied ? 'Copied to clipboard' : ''}
+    </span>
+  )
+}
+
+export function scrollBehavior(): ScrollBehavior {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
 }
 
 export const mono = "'JetBrains Mono', monospace"
@@ -140,7 +175,7 @@ export function themeConfig(mode: 'light' | 'dark'): Record<string, unknown> {
 
 export function Logo({ size }: { size: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 26 26" fill="none" style={{ flex: 'none' }}>
+    <svg width={size} height={size} viewBox="0 0 26 26" fill="none" style={{ flex: 'none' }} aria-hidden>
       <rect x="1" y="8.5" width="9" height="9" rx="2.4" fill="#0E7C6B" />
       <rect x="16" y="1" width="9" height="9" rx="2.4" fill="#1C1A17" />
       <rect x="16" y="16" width="9" height="9" rx="2.4" fill="#C9A227" />

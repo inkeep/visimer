@@ -6,7 +6,9 @@ import {
   CodeMirrorPane,
   Logo,
   PRESETS,
+  PRESET_KEYS,
   TYPE_LABELS,
+  type PresetKey,
   codeFromHash,
   encodeCode,
   mono,
@@ -92,7 +94,7 @@ export default function PlaygroundPage() {
     }
   }, [menuOpen])
 
-  const loadSample = (k: string) => {
+  const loadSample = (k: PresetKey) => {
     editor.setCode(PRESETS[k], 'api')
     setMenuOpen(false)
     track('preset_switched', { preset: k, surface: 'playground-page' })
@@ -224,7 +226,7 @@ export default function PlaygroundPage() {
                 <span style={{ ...chromeLabel, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.07em', padding: '5px 9px 4px' }}>
                   Load sample
                 </span>
-                {Object.keys(TYPE_LABELS).map((k) => (
+                {PRESET_KEYS.map((k) => (
                   <button
                     key={k}
                     type="button"
