@@ -14,7 +14,8 @@ test exercises the seam.
 | CodeMirror binding | `@visimer/codemirror` against a real CodeMirror 6 `EditorView` | `packages/codemirror/test/binding.test.ts` (jsdom): engine ops → view, view edits → engine, decorations in the DOM, caret → entity selection, engine-authoritative undo, teardown | A |
 | Monaco binding | `@visimer/monaco` against the structural editor interface it binds | `packages/monaco/test/binding.test.ts`: fake implementing exactly the bound surface (both sync directions, decorations, caret reasons, undo keys, dispose), plus a compile-time conformance check that real `monaco-editor` types satisfy the interface | B |
 | Canvas render loop (what makes `@visimer/dom` re-render) | The triggers and the guards on them: source changes, config changes, and the webfont-settled re-measure that keeps labels from being clipped on a cold load | `packages/dom/test/fonts.test.ts` drives a real `MermaidCanvasView` over a fake mermaid and a stubbed `FontFaceSet`: re-renders once when fonts land late, never when they were already there, never after `destroy()`, never where the document exposes no font set | B |
-| SVG correlation (dom package ↔ Mermaid's rendered DOM) | Third-party dependency seam: correlators key off Mermaid's internal SVG structure, which can shift between Mermaid releases | None automated. Verified manually in the playground across all 23 diagram types | uncovered |
+| SVG correlation — mermaid side (dom package ↔ Mermaid's rendered DOM) | Third-party dependency seam: correlators key off Mermaid's internal SVG structure, which can shift between Mermaid releases | None automated. Verified manually in the playground across all 23 diagram types | uncovered |
+| SVG correlation — pele side (dom package ↔ pele's rendered SVG) | Third-party dependency seam: pele correlators key off pele's internal SVG structure | `packages/dom/test/correlate-pele*.test.ts` (~100 fixture tests, one suite per correlation family group; jsdom; pele's metrics fallback) render real pele SVG — flowchart, sequence, state, class, ER, pie, gantt, and the 15 line-item types — and assert entities were tagged, ambiguous matches degraded (never mis-paired), scenery left untagged, and edits round-tripped visibly through the view | A |
 | Canvas interaction layer (popovers, drag, in-place editing) | `@visimer/dom` gestures compiled to engine ops | None automated. Verified manually in the playground | uncovered |
 | React bindings | `@visimer/react` hooks/components over core events | None automated. Thin subscription layer; exercised manually via the playground | uncovered |
 
@@ -23,8 +24,11 @@ test exercises the seam.
 What the current suite cannot catch:
 
 - **A Mermaid upgrade that shifts the rendered SVG structure.** This is the
-  highest-risk seam. Correlators fail soft (elements degrade to view-only),
-  so the failure is silent feature loss, not a crash. Closing it needs a
+  highest-risk seam on the Mermaid side. Correlators fail soft (elements
+  degrade to view-only), so the failure is silent feature loss, not a crash.
+  The pele side of this seam is now covered: every diagram family has a
+  real-render fixture suite (`correlate-pele*.test.ts`) asserting entities
+  were tagged and degraded sanely. Closing the Mermaid side still needs a
   real-browser rung (vitest browser mode or Playwright) that renders real
   Mermaid per diagram type and asserts entities were tagged; jsdom cannot
   provide it because Mermaid layout requires real text measurement.
@@ -38,8 +42,8 @@ What the current suite cannot catch:
 - **React render-loop regressions** (stale subscriptions, effect ordering).
   Would need @testing-library/react coverage.
 
-The playground doubles as the manual harness for all three: every editable
-type has a sample, and the toolbar/popovers exercise the gesture surface.
+The playground doubles as the manual harness for the uncovered seams: every
+editable type has a sample, and the toolbar/popovers exercise the gesture surface.
 
 ## Running
 

@@ -29,7 +29,7 @@ function esc(s: string): string {
  * overlay is painted BEFORE the visible path so the arrow head, cross, or
  * dot still visually wins overlap, and it inherits the same paint transform.
  */
-function addEdgeHitOverlay(path: SVGElement, entityId: string): void {
+export function addEdgeHitOverlay(path: SVGElement, entityId: string): void {
   const doc = path.ownerDocument
   if (!doc || path.hasAttribute('data-mw-hit-overlay')) return
   const parent = path.parentNode
@@ -464,8 +464,8 @@ export function correlateLineItems(svg: SVGSVGElement, graph: LineItemsGraph): C
 export interface SequenceCorrelation {
   /** participant entity id → every SVG element belonging to it (top + bottom boxes) */
   participants: Map<string, Element[]>
-  /** participant entity id → lifeline <line> element */
-  lifelines: Map<string, SVGLineElement>
+  /** participant entity id → its lifeline element (`<line>` under mermaid, `<path>` under pele) */
+  lifelines: Map<string, SVGGeometryElement>
   /** event entity id → primary element (message line / note rect) */
   events: Map<string, Element>
   /** event entity id → its text element */
@@ -480,7 +480,7 @@ export interface SequenceCorrelation {
  */
 export function correlateSequence(svg: SVGSVGElement, graph: SequenceGraph): SequenceCorrelation {
   const participants = new Map<string, Element[]>()
-  const lifelines = new Map<string, SVGLineElement>()
+  const lifelines = new Map<string, SVGGeometryElement>()
   const events = new Map<string, Element>()
   const eventTexts = new Map<string, Element>()
   const failed: string[] = []
