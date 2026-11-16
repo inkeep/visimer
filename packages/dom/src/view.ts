@@ -1428,13 +1428,12 @@ export class MermaidCanvasView {
     const session = this.inPlaceSession!
     session.label = label
 
-    label.setAttribute('contenteditable', 'true')
-    // the box can't grow while renders are held — keep the text on one line
-    // and let it spill past the shape instead of wrapping into the clip
     const clipHost = label.closest('foreignObject') as SVGElement | null
     const prevWhiteSpace = label.style.whiteSpace
     const prevClipOverflow = clipHost?.style.overflow ?? ''
-    label.style.whiteSpace = 'nowrap'
+    // WARN: read white-space before contenteditable is set; `.mw-canvas [contenteditable="true"]` and host editor stylesheets (ProseMirror) restyle editable text to pre-wrap
+    label.style.whiteSpace = getComputedStyle(label).whiteSpace
+    label.setAttribute('contenteditable', 'true')
     if (clipHost) clipHost.style.overflow = 'visible'
     label.focus()
     if (resuming && session.caretOffset >= 0) {
