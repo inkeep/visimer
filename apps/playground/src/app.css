@@ -83,6 +83,14 @@ body {
 .toolbar.disabled { opacity: 0.4; pointer-events: none; }
 .spacer { flex: 1; }
 
+/* renderer notice (shown under the toolbar when the pele renderer is active) */
+.notice {
+  flex: 0 0 auto; padding: 6px 12px; font-size: 12px; line-height: 1.45;
+  color: var(--dim); background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.notice strong { color: var(--fg); font-weight: 600; }
+
 button, select {
   height: 30px; padding: 0 12px; border-radius: 6px; font-size: 13px; font-family: var(--sans);
   background: var(--bg); color: var(--fg); border: 1px solid var(--border-strong);
@@ -110,6 +118,16 @@ select { appearance: none; padding-right: 26px; background-image: url("data:imag
   --mw-chrome-fg: var(--fg);
   --mw-chrome-hover: oklch(0.269 0 0);
   --mw-chrome-dim: var(--dim);
+  /* pele theme (INK-matched; read by pele's SVG stylesheet) */
+  --pele-bg: #000000;
+  --pele-fg: #ededed;
+  --pele-muted: #a1a1a1;
+  --pele-line: #8f8f8f;
+  --pele-surface: #111111;
+  --pele-surface-alt: #1a1a1a;
+  --pele-border: #3f3f3f;
+  --pele-accent: #3784ff;
+  --pele-font: "Inter Variable", "Inter", ui-sans-serif, system-ui, sans-serif;
 }
 .canvas:focus { outline: none; }
 

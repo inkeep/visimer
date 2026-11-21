@@ -52,5 +52,5 @@ export interface Diagnostic {
   message: string
   span: Span | null
   severity: 'error' | 'warning'
-  source: 'core' | 'mermaid'
+  source: 'core' | 'mermaid' | 'pele'
 }
