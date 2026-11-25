@@ -37,7 +37,7 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -145,32 +145,43 @@ jobs:
           VERSION=$(node -p "require('./packages/core/package.json').version")
 
           # Ground-truth check: verify every workspace package actually
-          # resolves on npm at VERSION before pushing tags. The registry
-          # read-path can lag the publish by seconds — retry with backoff.
+          # resolves on npm at VERSION before pushing tags.
           MISSING=()
           for pkg_json in packages/*/package.json; do
             PKG_NAME=$(node -p "require('./$pkg_json').name" 2>/dev/null || echo "")
             IS_PRIVATE=$(node -p "require('./$pkg_json').private ?? false" 2>/dev/null || echo "false")
             [ -z "$PKG_NAME" ] && continue
             [ "$IS_PRIVATE" = "true" ] && continue
-            FOUND=false
-            for attempt in 1 2 3 4; do
-              if npm view "$PKG_NAME@$VERSION" version >/dev/null 2>&1; then
-                FOUND=true
-                break
-              fi
-              if [ "$attempt" -lt 4 ]; then
-                sleep $((attempt * 2))
+            MISSING+=("$PKG_NAME")
+          done
+
+          WAIT_MINUTES=20
+          DEADLINE=$((SECONDS + WAIT_MINUTES * 60))
+          declare -A LAST_ERROR=()
+          while :; do
+            STILL_MISSING=()
+            for PKG_NAME in "${MISSING[@]}"; do
+              STATUS=0
+              OUTPUT=$(npm view "$PKG_NAME@$VERSION" version --prefer-online 2>&1) || STATUS=$?
+              if [ "$STATUS" -ne 0 ]; then
+                STILL_MISSING+=("$PKG_NAME")
+                LAST_ERROR[$PKG_NAME]="exit $STATUS: $(printf '%s\n' "$OUTPUT" | sed -e '/^npm error *[0-9]*$/d' | sed -n '1,3p' | tr '\n' ' ')"
               fi
             done
-            if [ "$FOUND" = "false" ]; then
-              MISSING+=("$PKG_NAME")
+            MISSING=("${STILL_MISSING[@]}")
+            if [ ${#MISSING[@]} -eq 0 ] || [ "$SECONDS" -ge "$DEADLINE" ]; then
+              break
             fi
+            echo "Waiting for npm to serve v$VERSION of: ${MISSING[*]}"
+            sleep 20
           done
 
           if [ ${#MISSING[@]} -gt 0 ]; then
-            echo "::error::Publish log reported success, but these packages are NOT on npm at v$VERSION after retries: ${MISSING[*]}"
-            echo "::error::Likely a partial publish. Re-running this workflow is safe — changeset publish is idempotent."
+            echo "::error::changeset publish reported success, but npm did not serve these packages at v$VERSION within $WAIT_MINUTES minutes: ${MISSING[*]}"
+            for PKG_NAME in "${MISSING[@]}"; do
+              echo "::error::$PKG_NAME@$VERSION, last npm view: ${LAST_ERROR[$PKG_NAME]}"
+            done
+            echo "::error::npm may still be scanning or may have held the version; check it on npmjs.com. A re-run publishes nothing and pushes no tags, so once npm serves every package, push the @visimer/*@$VERSION tags by hand."
             exit 1
           fi
 
