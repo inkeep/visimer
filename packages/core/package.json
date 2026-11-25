@@ -1,6 +1,6 @@
 {
   "name": "@visimer/core",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "Headless bidirectional editing engine for Mermaid diagrams: lossless CST, semantic graph, ops compiled to minimal text edits.",
   "type": "module",
   "main": "./src/index.ts",

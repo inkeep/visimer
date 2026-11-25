@@ -1,5 +1,12 @@
 # @visimer/dom
 
+## 1.1.5
+
+### Patch Changes
+
+- 012d517: Editing a label in place now grows its shape as you type, and the diagram settles into Mermaid's own layout whenever you pause, instead of text spilling over neighbouring shapes until you press Enter.
+  - @visimer/core@1.1.5
+
 ## 1.1.4
 
 ### Patch Changes
