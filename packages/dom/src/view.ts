@@ -32,6 +32,7 @@ import {
   type PopoverPanelSection,
 } from './popover'
 import { ICONS } from './icons'
+import { applyLiveLayout, captureLiveLayout, transplantGeometry, type LiveLayout } from './live-layout'
 
 /** default swatches offered in the color panels (works on light and dark themes) */
 export const COLOR_PALETTE = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#6366f1', '#d946ef', '#64748b']
@@ -270,6 +271,22 @@ function readLabelHtml(label: HTMLElement): string {
     .trim()
 }
 
+interface LiveView {
+  width: number
+  anchor: Element | null
+  at: { x: number; y: number } | null
+}
+
+function centerOf(el: Element): { x: number; y: number } {
+  const rect = el.getBoundingClientRect()
+  return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+}
+
+function labelWraps(label: HTMLElement): boolean {
+  const mode = getComputedStyle(label).whiteSpace
+  return mode !== 'nowrap' && mode !== 'pre'
+}
+
 function readLabelSnapshot(label: HTMLElement): string {
   return (label.innerHTML ?? '').replace(/<br\s*\/?>/gi, '<br/>')
 }
@@ -396,7 +413,12 @@ export class MermaidCanvasView {
     label: HTMLElement | null
     /** finish the session from outside the attach closure (commit or revert) */
     finish: ((commit: boolean) => void) | null
+    layout: LiveLayout | null
+    calibration: { x: number; y: number } | null
+    layoutTouched: boolean
   } | null = null
+  private liveLayoutSeq = 0
+  private pendingViewAnchor: { entityId: string; at: { x: number; y: number } } | null = null
   private lastError: string | null = null
   /** a render was requested while an in-place edit was typing; applied on finish */
   private renderHeldByEdit = false
@@ -776,6 +798,7 @@ export class MermaidCanvasView {
     // sync; the canvas catches up the moment the session ends.
     if (this.inPlaceSession) {
       this.renderHeldByEdit = true
+      void this.relayoutBehindSession()
       return
     }
     const code = this.editor.code
@@ -794,12 +817,7 @@ export class MermaidCanvasView {
     const seq = ++this.renderSeq
     const id = `mw-render-${++renderIdCounter}`
     try {
-      // mermaid.initialize writes a module-global config, so with more than one
-      // canvas on a page the last one to mount owns it and every other canvas
-      // renders with the wrong theme and layout. Re-assert ours here rather than
-      // trusting whatever was initialized in the constructor.
-      this.mermaid.initialize(this.mermaidConfig)
-      const { svg } = await this.mermaid.render(id, code)
+      const svg = await this.renderMarkup(id, code)
       if (seq !== this.renderSeq) return // stale
       // an in-place edit may have kept typing since the live commit this render
       // came from — snapshot the label's real text and caret before the swap
@@ -832,6 +850,7 @@ export class MermaidCanvasView {
         else this.svg.style.maxWidth = '100%'
         injectAnimationKeyframes(this.svg)
         this.bindSvg()
+        this.holdPendingViewAnchor()
       }
       this.editor.setDiagnostics([])
       this.emit('render', { ok: true })
@@ -845,9 +864,7 @@ export class MermaidCanvasView {
       }
     } catch (err) {
       if (seq !== this.renderSeq) return
-      // mermaid can leave a temp error element behind
-      document.getElementById(`d${id}`)?.remove()
-      document.getElementById(id)?.remove()
+      this.pendingViewAnchor = null
       const message = err instanceof Error ? err.message.split('\n')[0] : String(err)
       this.lastError = message
       this.errorBadge.textContent = `render error: ${message}`
@@ -855,6 +872,22 @@ export class MermaidCanvasView {
       const diag: Diagnostic = { message, span: null, severity: 'error', source: 'mermaid' }
       this.editor.setDiagnostics([diag])
       this.emit('render', { ok: false, error: message })
+    }
+  }
+
+  private async renderMarkup(id: string, code: string): Promise<string> {
+    // mermaid.initialize writes a module-global config, so with more than one
+    // canvas on a page the last one to mount owns it and every other canvas
+    // renders with the wrong theme and layout. Re-assert ours here rather than
+    // trusting whatever was initialized in the constructor.
+    this.mermaid.initialize(this.mermaidConfig)
+    try {
+      return (await this.mermaid.render(id, code)).svg
+    } catch (err) {
+      // mermaid can leave a temp error element behind
+      document.getElementById(`d${id}`)?.remove()
+      document.getElementById(id)?.remove()
+      throw err
     }
   }
 
@@ -1423,6 +1456,9 @@ export class MermaidCanvasView {
         liveTimer: null,
         label: null,
         finish: null,
+        layout: null,
+        calibration: null,
+        layoutTouched: false,
       }
     }
     const session = this.inPlaceSession!
@@ -1445,6 +1481,7 @@ export class MermaidCanvasView {
       selection?.removeAllRanges()
       selection?.addRange(range)
     }
+    if (opts.live !== false) this.attachLiveLayout(session, label)
 
     const rememberCaret = () => {
       const offset = caretOffsetWithin(label)
@@ -1463,7 +1500,19 @@ export class MermaidCanvasView {
     const finish = (commit: boolean) => {
       if (this.inPlaceSession !== session) return
       this.inPlaceSession = null
+      this.liveLayoutSeq++
       if (session.liveTimer) clearTimeout(session.liveTimer)
+      if (session.layout) {
+        const anchor = session.layout.labelBox.el
+        if (!commit) {
+          const view = this.captureView(anchor)
+          applyLiveLayout(session.layout, 0, 0)
+          this.followLiveViewBox(view)
+        }
+        if (session.layoutTouched && anchor.isConnected) {
+          this.pendingViewAnchor = { entityId: session.entityId, at: centerOf(anchor) }
+        }
+      }
       label.removeAttribute('contenteditable')
       label.style.whiteSpace = prevWhiteSpace
       if (clipHost) clipHost.style.overflow = prevClipOverflow
@@ -1487,6 +1536,10 @@ export class MermaidCanvasView {
           this.scheduleRender()
         }
       }
+      if (session.layoutTouched) {
+        this.lastRenderedCode = ''
+        this.renderHeldByEdit = true
+      }
       // apply any canvas render held back while the session was typing
       if (this.renderHeldByEdit) {
         this.renderHeldByEdit = false
@@ -1496,6 +1549,7 @@ export class MermaidCanvasView {
     }
 
     const onInput = () => {
+      this.updateLiveLayout()
       if (opts.live === false) return
       if (session.liveTimer) clearTimeout(session.liveTimer)
       session.liveTimer = setTimeout(liveCommit, 450)
@@ -1527,6 +1581,132 @@ export class MermaidCanvasView {
   /** non-narrowing accessor: render() re-reads the session after awaits */
   private activeInPlaceSession() {
     return this.inPlaceSession
+  }
+
+  private measureLabel(label: HTMLElement): { width: number; height: number } | null {
+    const ctm = this.svg?.getScreenCTM?.()
+    if (!ctm) return null
+    const scaleX = Math.hypot(ctm.a, ctm.b)
+    const scaleY = Math.hypot(ctm.c, ctm.d)
+    if (!scaleX || !scaleY) return null
+    const rect = label.getBoundingClientRect()
+    if (labelWraps(label)) return { width: rect.width / scaleX, height: rect.height / scaleY }
+    const text = document.createRange()
+    text.selectNodeContents(label)
+    return { width: text.getBoundingClientRect().width / scaleX, height: rect.height / scaleY }
+  }
+
+  private wrapLikeMermaid(label: HTMLElement): boolean {
+    const cell = label.closest<HTMLElement>('foreignObject > div')
+    if (!cell || labelWraps(label)) return false
+    const limit = Number.parseFloat(getComputedStyle(cell).maxWidth)
+    if (!Number.isFinite(limit) || label.scrollWidth <= limit) return false
+    cell.style.display = 'table'
+    cell.style.whiteSpace = 'break-spaces'
+    cell.style.width = `${limit}px`
+    label.style.whiteSpace = 'break-spaces'
+    return true
+  }
+
+  private attachLiveLayout(session: NonNullable<MermaidCanvasView['inPlaceSession']>, label: HTMLElement) {
+    session.layout = this.svg ? captureLiveLayout(this.svg, label) : null
+    if (!session.layout || session.calibration) return
+    const measured = this.measureLabel(label)
+    const reserved = session.layout.labelBox
+    const boxWidth = reserved.width * reserved.scaleX
+    const boxHeight = reserved.height * reserved.scaleY
+    if (!measured || !measured.width || !measured.height || !boxWidth || !boxHeight) {
+      session.layout = null
+      return
+    }
+    session.calibration = { x: measured.width / boxWidth, y: measured.height / boxHeight }
+  }
+
+  private updateLiveLayout() {
+    const session = this.inPlaceSession
+    const label = session?.label
+    if (!session?.layout || !session.calibration || !label?.isConnected) return
+    if (this.wrapLikeMermaid(label)) session.layoutTouched = true
+    const measured = this.measureLabel(label)
+    if (!measured) return
+    const reserved = session.layout.labelBox
+    const widthScale = labelWraps(label) ? 1 : session.calibration.x
+    const dx = measured.width - reserved.width * reserved.scaleX * widthScale
+    const dy = measured.width ? measured.height - reserved.height * reserved.scaleY * session.calibration.y : 0
+    const growX = Math.abs(dx) < 0.5 ? 0 : dx
+    const growY = Math.abs(dy) < 0.5 ? 0 : dy
+    const view = this.captureView(session.layout.labelBox.el)
+    applyLiveLayout(session.layout, growX, growY)
+    if (growX || growY) session.layoutTouched = true
+    this.followLiveViewBox(view)
+  }
+
+  private async relayoutBehindSession() {
+    const session = this.inPlaceSession
+    if (!session?.layout || !this.svg) return
+    const seq = ++this.liveLayoutSeq
+    let markup: string
+    try {
+      markup = await this.renderMarkup(`mw-live-${++renderIdCounter}`, this.editor.code)
+    } catch {
+      return
+    }
+    const label = session.label
+    const svg = this.svg
+    if (seq !== this.liveLayoutSeq || this.inPlaceSession !== session || this.destroyed) return
+    if (!svg || !label?.isConnected || !svg.contains(label)) return
+    const template = document.createElement('template')
+    template.innerHTML = markup
+    const fresh = template.content.querySelector('svg')
+    if (!fresh) return
+    const view = this.captureView(label.closest('foreignObject'))
+    const inherited = label.parentElement ? getComputedStyle(label.parentElement).whiteSpace : null
+    if (!transplantGeometry(svg, fresh, label)) return
+    session.layoutTouched = true
+    const reinherited = label.parentElement ? getComputedStyle(label.parentElement).whiteSpace : null
+    if (reinherited && reinherited !== inherited) label.style.whiteSpace = reinherited
+    session.layout = captureLiveLayout(svg, label)
+    this.followLiveViewBox(view)
+    this.updateLiveLayout()
+  }
+
+  private captureView(anchor: Element | null): LiveView | null {
+    if (!this.svg) return null
+    return { width: this.svg.viewBox.baseVal.width, anchor, at: anchor ? centerOf(anchor) : null }
+  }
+
+  private followLiveViewBox(view: LiveView | null) {
+    if (!this.svg || !view) return
+    const vb = this.svg.viewBox.baseVal
+    if (!this.panZoomEnabled) {
+      const pinned = /^([\d.]+)px$/.exec(this.svg.style.maxWidth)
+      if (pinned && view.width) this.svg.style.maxWidth = `${(Number(pinned[1]) * vb.width) / view.width}px`
+      return
+    }
+    this.svgSize = { width: vb.width, height: vb.height }
+    this.svg.style.width = `${vb.width}px`
+    this.svg.style.height = `${vb.height}px`
+    if (!this.hasUserView) {
+      this.fitView()
+      return
+    }
+    if (view.anchor && view.at) this.holdOnScreen(view.anchor, view.at)
+  }
+
+  private holdOnScreen(anchor: Element, at: { x: number; y: number }) {
+    const now = centerOf(anchor)
+    this.zoomTx += at.x - now.x
+    this.zoomTy += at.y - now.y
+    this.applyViewTransform()
+  }
+
+  private holdPendingViewAnchor() {
+    const pending = this.pendingViewAnchor
+    this.pendingViewAnchor = null
+    if (!pending || !this.panZoomEnabled || !this.hasUserView) return
+    const entity = this.correlation?.edgeLabels.get(pending.entityId) ?? this.entityElement(pending.entityId)
+    const anchor = entity?.querySelector('foreignObject')
+    if (anchor) this.holdOnScreen(anchor, pending.at)
   }
 
   /** re-attach a live in-place editing session after a render replaced the DOM */
